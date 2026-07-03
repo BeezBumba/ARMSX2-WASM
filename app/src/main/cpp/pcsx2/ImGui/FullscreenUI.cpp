@@ -3914,6 +3914,9 @@ void FullscreenUI::DrawGraphicsSettingsPage(SettingsInterface* bsi, bool show_ad
 #ifdef ENABLE_OPENGL
 		FSUI_NSTR("OpenGL"),
 #endif
+#ifdef EMSCRIPTEN
+		FSUI_NSTR("WebGL 2"),
+#endif
 #ifdef ENABLE_VULKAN
 		FSUI_NSTR("Vulkan"),
 #endif
@@ -3931,6 +3934,9 @@ void FullscreenUI::DrawGraphicsSettingsPage(SettingsInterface* bsi, bool show_ad
 #endif
 #ifdef ENABLE_OPENGL
 		"12", //GSRendererType::OGL,
+#endif
+#ifdef EMSCRIPTEN
+		"18", //GSRendererType::WebGL2,
 #endif
 #ifdef ENABLE_VULKAN
 		"14", //GSRendererType::VK,
@@ -4056,7 +4062,8 @@ void FullscreenUI::DrawGraphicsSettingsPage(SettingsInterface* bsi, bool show_ad
 	const GSRendererType renderer =
 		static_cast<GSRendererType>(GetEffectiveIntSetting(bsi, "EmuCore/GS", "Renderer", static_cast<int>(GSRendererType::Auto)));
 	const bool is_hardware = (renderer == GSRendererType::Auto || renderer == GSRendererType::DX11 || renderer == GSRendererType::DX12 ||
-							  renderer == GSRendererType::OGL || renderer == GSRendererType::VK || renderer == GSRendererType::Metal);
+							  renderer == GSRendererType::OGL || renderer == GSRendererType::WebGL2 ||
+							  renderer == GSRendererType::VK || renderer == GSRendererType::Metal);
 	//const bool is_software = (renderer == GSRendererType::SW);
 
 #ifndef PCSX2_DEVBUILD

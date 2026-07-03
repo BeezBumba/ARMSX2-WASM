@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARMSX2 WASM Bootstrap</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #05070d;
+      color: #d9e2f2;
+      font-family: system-ui, sans-serif;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #status {
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+    }
+
+    #canvas {
+      flex: 1;
+      width: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">ARMSX2 WASM bootstrap: SDL3 + WebGL2 scaffold loading…</div>
+  <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  <script>
+    var Module = typeof Module !== 'undefined' ? Module : {};
+    Module.canvas = document.getElementById('canvas');
+    Module.setStatus = function (text) {
+      document.getElementById('status').textContent = text;
+    };
+    Module.monitorRunDependencies = function (left) {
+      Module.setStatus(left ? ('Preparing assets (' + left + ' remaining)…') : 'Running bootstrap…');
+    };
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

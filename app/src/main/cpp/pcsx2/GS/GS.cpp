@@ -80,6 +80,7 @@ static RenderAPI GetAPIForRenderer(GSRendererType renderer)
 	switch (renderer)
 	{
 		case GSRendererType::OGL:
+		case GSRendererType::WebGL2:
 			return RenderAPI::OpenGL;
 
 		case GSRendererType::VK:
@@ -615,6 +616,9 @@ std::vector<GSAdapterInfo> GSGetAdapterInfo(GSRendererType renderer)
 		}
 		break;
 #endif
+
+		case GSRendererType::WebGL2:
+			break;
 
 		default:
 			break;
