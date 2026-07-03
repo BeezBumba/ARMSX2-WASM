@@ -1,4 +1,5 @@
 #include "program_loader.h"
+#include "wasm_memory.h"
 
 #include <algorithm>
 #include <cstring>
@@ -13,7 +14,6 @@ namespace
 constexpr std::array<u8, 4> s_elf_magic = {0x7F, 'E', 'L', 'F'};
 constexpr std::array<char, 8> s_psx_magic = {'P', 'S', '-', 'X', ' ', 'E', 'X', 'E'};
 constexpr u32 s_loadable_segment_type = 1;
-constexpr u32 s_max_image_span = 256u * 1024u * 1024u;
 
 bool AddOverflows(u32 lhs, u32 rhs)
 {
@@ -179,14 +179,12 @@ LoadedProgramImage ProgramLoader::LoadElf(std::span<const u8> data) const
 	image.load_start = load_start;
 	image.load_end = load_end;
 
-	if ((load_end - load_start) > s_max_image_span)
+	if (!ResetBootstrapPs2Memory(&image.error))
 	{
-		image.error = "ELF load span is too large for the current WASM bootstrap memory image.";
 		image.summary = BuildSummary(image);
 		return image;
 	}
 
-	image.memory_image.resize(load_end - load_start);
 	for (u32 index = 0; index < header.e_phnum; index++)
 	{
 		ELF_PHR program_header = {};
@@ -196,9 +194,15 @@ LoadedProgramImage ProgramLoader::LoadElf(std::span<const u8> data) const
 		if (program_header.p_type != s_loadable_segment_type || program_header.p_memsz == 0)
 			continue;
 
-		const size_t destination_offset = static_cast<size_t>(program_header.p_vaddr - load_start);
-		std::memcpy(image.memory_image.data() + destination_offset,
-			data.data() + program_header.p_offset, program_header.p_filesz);
+		if (!WriteBootstrapEEMemory(program_header.p_vaddr,
+				std::span<const u8>(data.data() + program_header.p_offset, program_header.p_filesz), &image.error))
+		{
+			image.summary = BuildSummary(image);
+			return image;
+		}
+
+		image.ee_bytes_written += program_header.p_filesz;
+		image.zero_filled_bytes += (program_header.p_memsz - program_header.p_filesz);
 	}
 
 	image.valid = true;
@@ -236,9 +240,15 @@ LoadedProgramImage ProgramLoader::LoadPSXExe(std::span<const u8> data) const
 		return image;
 	}
 
+	if (header.memfill_size > 0 && AddOverflows(header.memfill_start, header.memfill_size))
+	{
+		image.error = "PS-X EXE memfill range overflows the 32-bit address space.";
+		image.summary = BuildSummary(image);
+		return image;
+	}
+
 	const u32 load_end = header.load_address + payload_size;
-	const u32 memfill_end = AddOverflows(header.memfill_start, header.memfill_size) ?
-		header.memfill_start : (header.memfill_start + header.memfill_size);
+	const u32 memfill_end = header.memfill_start + header.memfill_size;
 	const u32 image_start = std::min(header.load_address, header.memfill_size > 0 ? header.memfill_start : header.load_address);
 	const u32 image_end = std::max(load_end, memfill_end);
 
@@ -249,9 +259,8 @@ LoadedProgramImage ProgramLoader::LoadPSXExe(std::span<const u8> data) const
 		return image;
 	}
 
-	if ((image_end - image_start) > s_max_image_span)
+	if (!ResetBootstrapPs2Memory(&image.error))
 	{
-		image.error = "PS-X EXE load span is too large for the current WASM bootstrap memory image.";
 		image.summary = BuildSummary(image);
 		return image;
 	}
@@ -278,9 +287,21 @@ LoadedProgramImage ProgramLoader::LoadPSXExe(std::span<const u8> data) const
 
 	image.program_header_count = static_cast<u32>(image.segments.size());
 	image.loadable_segment_count = static_cast<u32>(image.segments.size());
-	image.memory_image.resize(image_end - image_start);
-	std::memcpy(image.memory_image.data() + static_cast<size_t>(header.load_address - image_start),
-		data.data() + sizeof(PSXEXEHeader), payload_size);
+	if (header.memfill_size > 0 && !ZeroBootstrapIOPMemory(header.memfill_start, header.memfill_size, &image.error))
+	{
+		image.summary = BuildSummary(image);
+		return image;
+	}
+
+	if (!WriteBootstrapIOPMemory(header.load_address,
+			std::span<const u8>(data.data() + sizeof(PSXEXEHeader), payload_size), &image.error))
+	{
+		image.summary = BuildSummary(image);
+		return image;
+	}
+
+	image.iop_bytes_written = payload_size;
+	image.zero_filled_bytes = header.memfill_size;
 
 	image.valid = true;
 	image.summary = BuildSummary(image);
@@ -316,7 +337,9 @@ std::string ProgramLoader::BuildSummary(const LoadedProgramImage& image)
 	stream << "Program headers: " << image.program_header_count << '\n';
 	stream << "Loadable segments: " << image.loadable_segment_count << '\n';
 	stream << "Load range: " << FormatHex(image.load_start) << " - " << FormatHex(image.load_end) << '\n';
-	stream << "Mapped image bytes: " << image.memory_image.size() << '\n';
+	stream << "EE bytes written: " << image.ee_bytes_written << '\n';
+	stream << "IOP bytes written: " << image.iop_bytes_written << '\n';
+	stream << "Zero-filled bytes: " << image.zero_filled_bytes << '\n';
 
 	if (image.text_size > 0)
 		stream << "Entry segment: " << FormatHex(image.text_start) << " (" << image.text_size << " bytes)\n";

@@ -8,6 +8,7 @@ add_executable(armsx2-wasm-bootstrap
 	wasm_main.cpp
 	ir_interpreter.cpp
 	program_loader.cpp
+	wasm_memory.cpp
 )
 
 target_include_directories(armsx2-wasm-bootstrap PRIVATE

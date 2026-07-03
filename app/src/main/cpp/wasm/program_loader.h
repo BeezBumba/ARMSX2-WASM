@@ -39,8 +39,10 @@ struct LoadedProgramImage
 	u32 text_size = 0;
 	u32 program_header_count = 0;
 	u32 loadable_segment_count = 0;
+	u32 ee_bytes_written = 0;
+	u32 iop_bytes_written = 0;
+	u32 zero_filled_bytes = 0;
 	std::vector<ProgramSegment> segments;
-	std::vector<u8> memory_image;
 	std::array<float, 4> accent_color = {0.08f, 0.10f, 0.16f, 1.0f};
 };
 

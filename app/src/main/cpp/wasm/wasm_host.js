@@ -117,7 +117,7 @@ async function armsx2LoadProgramBytes(fileName, bytes, persistSelection) {
     armsx2RenderProgramInfo(fileName, summary);
 
     if (success) {
-      Module.setStatus(`Loaded ${fileName} into the WASM bootstrap memory image.`);
+      Module.setStatus(`Loaded ${fileName} into the bootstrap EE/IOP memory.`);
       if (persistSelection) {
         await armsx2PersistProgram(fileName, bytes);
       }
@@ -174,7 +174,7 @@ Module.onRuntimeInitialized = async function () {
   try {
     const restored = await armsx2RestorePersistedProgram();
     if (!restored) {
-      Module.setStatus('Select a PS2 ELF or PS-X EXE to inspect and map into WASM memory.');
+      Module.setStatus('Select a PS2 ELF or PS-X EXE to inspect and load into bootstrap EE/IOP memory.');
     }
   } catch (error) {
     console.error('Failed to restore persisted executable', error);
