@@ -8,7 +8,7 @@ const ARMSX2_LAST_PROGRAM_NAME_PATH = `${ARMSX2_PERSIST_DIR}/last-program.name`;
 const ARMSX2_BROWSER_ROOT = '/browser';
 const ARMSX2_BROWSER_BIOS_DIR = `${ARMSX2_BROWSER_ROOT}/bios`;
 const ARMSX2_BROWSER_GAME_DIR = `${ARMSX2_BROWSER_ROOT}/games`;
-// Keep in sync with s_max_browser_disc_import_bytes in wasm_main.cpp.
+// Keep in sync with s_max_browser_disc_import_bytes in wasm_main.cpp (4.7 GB, matching a common single-layer DVD image).
 const ARMSX2_MAX_GAME_IMAGE_BYTES = 4700000000;
 
 Module.preRun = Module.preRun || [];

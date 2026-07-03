@@ -24,7 +24,7 @@
 
 namespace
 {
-// Cap browser-backed disc imports at the common single-layer DVD size target requested for this bootstrap work.
+// Cap browser-backed disc imports at 4.7 GB, matching the common single-layer DVD game image target for this bootstrap work.
 constexpr std::uint64_t s_max_browser_disc_import_bytes = 4700000000ull;
 constexpr size_t s_iso9660_sector_size = 2048;
 constexpr off_t s_iso9660_primary_volume_descriptor_offset = static_cast<off_t>(16 * s_iso9660_sector_size);
