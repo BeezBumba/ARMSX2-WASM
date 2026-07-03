@@ -8,6 +8,7 @@ const ARMSX2_LAST_PROGRAM_NAME_PATH = `${ARMSX2_PERSIST_DIR}/last-program.name`;
 const ARMSX2_BROWSER_ROOT = '/browser';
 const ARMSX2_BROWSER_BIOS_DIR = `${ARMSX2_BROWSER_ROOT}/bios`;
 const ARMSX2_BROWSER_GAME_DIR = `${ARMSX2_BROWSER_ROOT}/games`;
+// Keep in sync with s_max_browser_disc_import_bytes in wasm_main.cpp.
 const ARMSX2_MAX_GAME_IMAGE_BYTES = 4700000000;
 
 Module.preRun = Module.preRun || [];
@@ -172,12 +173,8 @@ function armsx2EnsureDirectory(path) {
     return;
   }
 
-  try {
+  if (!FS.analyzePath(path).exists) {
     FS.mkdir(path);
-  } catch (error) {
-    if (!String(error).includes('File exists')) {
-      throw error;
-    }
   }
 }
 
@@ -189,13 +186,9 @@ function armsx2PrepareWorkerMount(mountPoint) {
   armsx2EnsureDirectory(ARMSX2_BROWSER_ROOT);
   armsx2EnsureDirectory(mountPoint);
 
-  try {
+  const mountInfo = FS.analyzePath(mountPoint);
+  if (mountInfo.exists && mountInfo.object && mountInfo.object.mounted) {
     FS.unmount(mountPoint);
-  } catch (error) {
-    if (!String(error).includes('No such file or directory') &&
-        !String(error).includes('EINVAL')) {
-      throw error;
-    }
   }
 }
 

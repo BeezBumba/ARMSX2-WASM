@@ -25,7 +25,13 @@
 namespace
 {
 // Cap browser-backed disc imports at the common single-layer DVD size target requested for this bootstrap work.
-constexpr std::uint64_t s_max_browser_disc_bytes = 4700000000ull;
+constexpr std::uint64_t s_max_browser_disc_import_bytes = 4700000000ull;
+constexpr size_t s_iso9660_sector_size = 2048;
+constexpr off_t s_iso9660_primary_volume_descriptor_offset = static_cast<off_t>(16 * s_iso9660_sector_size);
+constexpr std::uint8_t s_iso9660_primary_volume_descriptor_type = 1;
+constexpr std::array<char, 5> s_iso9660_standard_identifier = {'C', 'D', '0', '0', '1'};
+constexpr size_t s_iso9660_volume_id_offset = 40;
+constexpr size_t s_iso9660_volume_id_length = 32;
 
 struct WasmBootstrapApp
 {
@@ -107,25 +113,27 @@ std::string BuildBrowserMountSummary(const char* mounted_path, BrowserFileKind k
 
 bool TryInspectIso9660(const char* mounted_path, std::uint64_t size_bytes, std::string* details)
 {
-	if (size_bytes < (17ull * 2048ull))
+	if (size_bytes < (17ull * s_iso9660_sector_size))
 		return false;
 
 	FILE* file = std::fopen(mounted_path, "rb");
 	if (!file)
 		return false;
 
-	std::array<std::uint8_t, 2048> sector = {};
-	const bool seek_ok = (fseeko(file, static_cast<off_t>(16 * 2048), SEEK_SET) == 0);
+	std::array<std::uint8_t, s_iso9660_sector_size> sector = {};
+	const bool seek_ok = (fseeko(file, s_iso9660_primary_volume_descriptor_offset, SEEK_SET) == 0);
 	const size_t bytes_read = seek_ok ? std::fread(sector.data(), 1, sector.size(), file) : 0;
 	std::fclose(file);
 
 	if (!seek_ok || bytes_read != sector.size())
 		return false;
 
-	if (sector[0] != 1 || std::memcmp(sector.data() + 1, "CD001", 5) != 0)
+	if (sector[0] != s_iso9660_primary_volume_descriptor_type ||
+		std::memcmp(sector.data() + 1, s_iso9660_standard_identifier.data(), s_iso9660_standard_identifier.size()) != 0)
 		return false;
 
-	const std::string volume_id = TrimAscii(std::string_view(reinterpret_cast<const char*>(sector.data() + 40), 32));
+	const std::string volume_id = TrimAscii(std::string_view(
+		reinterpret_cast<const char*>(sector.data() + s_iso9660_volume_id_offset), s_iso9660_volume_id_length));
 	std::ostringstream stream;
 	stream << "Detected format: ISO9660 primary volume descriptor\n";
 	if (!volume_id.empty())
@@ -181,7 +189,7 @@ int MountBrowserFile(const char* mounted_path, BrowserFileKind kind)
 	const char* result = "mounted";
 	if (kind == BrowserFileKind::Game)
 	{
-		if (size_bytes > s_max_browser_disc_bytes)
+		if (size_bytes > s_max_browser_disc_import_bytes)
 		{
 			valid = false;
 			result = "failed";
