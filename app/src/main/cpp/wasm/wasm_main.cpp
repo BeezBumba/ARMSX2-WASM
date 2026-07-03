@@ -1,5 +1,9 @@
 #include "ir_interpreter.h"
 #include "program_loader.h"
+#include "wasm_memory.h"
+#include "mips_to_ir.h"
+#include "ee_ir_interpreter.h"
+#include "ee_state.h"
 
 #include <SDL3/SDL.h>
 
@@ -43,6 +47,14 @@ struct WasmBootstrapApp
 	armsx2::wasm::ProgramLoader loader;
 	armsx2::wasm::LoadedProgramImage loaded_program;
 	std::string browser_file_summary;
+
+	// -- EE IR recompilation pipeline --
+	armsx2::wasm::MipsLifter lifter;
+	armsx2::wasm::EEIRInterpreter ee_interpreter;
+	armsx2::wasm::EEState ee_state;
+	armsx2::wasm::EEIRBlock ee_lifted_block;
+	std::string ee_ir_summary;
+	bool ee_ir_lifted = false;
 };
 
 WasmBootstrapApp g_app;
@@ -312,6 +324,51 @@ int armsx2_wasm_load_program(const std::uint8_t* data, size_t size)
 	}
 
 	g_app.loaded_program = g_app.loader.LoadFromBytes(std::span<const u8>(reinterpret_cast<const u8*>(data), size));
+
+	// If the ELF loaded successfully, lift the entry block to IR.
+	if (g_app.loaded_program.valid && g_app.loaded_program.format == armsx2::wasm::ProgramFormat::PS2Elf)
+	{
+		// Use the flat EE memory backing for lifting.
+		extern EEVM_MemoryAllocMess* eeMem;
+		if (eeMem)
+		{
+			g_app.ee_state.Reset();
+			g_app.ee_state.pc = g_app.loaded_program.entry_point;
+
+			// Lift the entry basic block.
+			g_app.ee_lifted_block = g_app.lifter.LiftBlock(
+				reinterpret_cast<const std::uint8_t*>(eeMem),
+				sizeof(EEVM_MemoryAllocMess),
+				g_app.loaded_program.entry_point);
+
+			g_app.ee_ir_lifted = true;
+
+			// Run the lifted block through the IR interpreter.
+			auto run_result = g_app.ee_interpreter.Execute(
+				g_app.ee_lifted_block, g_app.ee_state,
+				reinterpret_cast<std::uint8_t*>(eeMem),
+				sizeof(EEVM_MemoryAllocMess));
+
+			// Build a summary of the IR lift + run.
+			std::ostringstream ir_out;
+			ir_out << "--- EE IR Pipeline ---\n";
+			ir_out << "Entry PC: 0x" << std::hex << g_app.loaded_program.entry_point << "\n";
+			ir_out << "Block range: 0x" << g_app.ee_lifted_block.start_pc
+				   << " .. 0x" << g_app.ee_lifted_block.end_pc << "\n" << std::dec;
+			ir_out << "IR nodes emitted: " << g_app.ee_lifted_block.instructions.size() << "\n";
+			ir_out << "IR nodes executed: " << run_result.instructions_run << "\n";
+			ir_out << "Next PC: 0x" << std::hex << run_result.next_pc << "\n" << std::dec;
+			if (run_result.halted)
+				ir_out << "Halted: yes\n";
+			if (!run_result.error.empty())
+				ir_out << "Error: " << run_result.error << "\n";
+			ir_out << "\n" << g_app.ee_lifted_block.Dump();
+			g_app.ee_ir_summary = ir_out.str();
+
+			std::fprintf(stdout, "%s\n", g_app.ee_ir_summary.c_str());
+		}
+	}
+
 	return g_app.loaded_program.valid ? 1 : 0;
 }
 
@@ -321,6 +378,14 @@ EMSCRIPTEN_KEEPALIVE
 const char* armsx2_wasm_get_program_summary()
 {
 	return g_app.loaded_program.summary.c_str();
+}
+
+#if defined(__EMSCRIPTEN__)
+EMSCRIPTEN_KEEPALIVE
+#endif
+const char* armsx2_wasm_get_ir_summary()
+{
+	return g_app.ee_ir_summary.c_str();
 }
 
 #if defined(__EMSCRIPTEN__)
