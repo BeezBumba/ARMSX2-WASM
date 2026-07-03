@@ -160,7 +160,7 @@ Module.onRuntimeInitialized = async function () {
 
     button.addEventListener('click', async function () {
       if (!input.files || !input.files.length) {
-        Module.setStatus('Choose a PS2 ELF or PS-X EXE first.');
+        Module.setStatus('Select a PS2 ELF or PS-X EXE file first.');
         return;
       }
 
