@@ -1,4 +1,5 @@
 #include "ir_interpreter.h"
+#include "program_loader.h"
 
 #include <SDL3/SDL.h>
 
@@ -9,7 +10,10 @@
 #include <GLES3/gl3.h>
 
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
+#include <span>
 
 namespace
 {
@@ -20,6 +24,8 @@ struct WasmBootstrapApp
 	armsx2::wasm::IRInterpreter interpreter;
 	armsx2::wasm::IRProgram program = armsx2::wasm::CreateBootstrapProgram();
 	armsx2::wasm::IRExecutionState state;
+	armsx2::wasm::ProgramLoader loader;
+	armsx2::wasm::LoadedProgramImage loaded_program;
 };
 
 WasmBootstrapApp g_app;
@@ -92,7 +98,14 @@ void TickApp()
 		}
 	}
 
-	g_app.interpreter.Execute(g_app.program, g_app.state);
+	if (g_app.loaded_program.valid)
+	{
+		g_app.state.color = g_app.loaded_program.accent_color;
+	}
+	else
+	{
+		g_app.interpreter.Execute(g_app.program, g_app.state);
+	}
 
 	int width = 0;
 	int height = 0;
@@ -103,6 +116,35 @@ void TickApp()
 	SDL_GL_SwapWindow(g_app.window);
 }
 } // namespace
+
+extern "C"
+{
+#if defined(__EMSCRIPTEN__)
+EMSCRIPTEN_KEEPALIVE
+#endif
+int armsx2_wasm_load_program(const std::uint8_t* data, size_t size)
+{
+	if (!data || size == 0)
+	{
+		g_app.loaded_program = {};
+		g_app.loaded_program.error = "No executable payload was provided to the WASM loader.";
+		g_app.loaded_program.summary = "ARMSX2 WASM executable loader\nLoad result: failed\nError: No executable payload was provided to the WASM loader.\n";
+		g_app.loaded_program.accent_color = {0.34f, 0.10f, 0.10f, 1.0f};
+		return 0;
+	}
+
+	g_app.loaded_program = g_app.loader.LoadFromBytes(std::span<const u8>(reinterpret_cast<const u8*>(data), size));
+	return g_app.loaded_program.valid ? 1 : 0;
+}
+
+#if defined(__EMSCRIPTEN__)
+EMSCRIPTEN_KEEPALIVE
+#endif
+const char* armsx2_wasm_get_program_summary()
+{
+	return g_app.loaded_program.summary.c_str();
+}
+}
 
 int main()
 {

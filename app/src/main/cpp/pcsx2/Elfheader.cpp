@@ -12,27 +12,6 @@
 
 #include "fmt/format.h"
 
-#pragma pack(push, 1)
-struct PSXEXEHeader
-{
-	char id[8]; // 0x000-0x007 PS-X EXE
-	char pad1[8]; // 0x008-0x00F
-	u32 initial_pc; // 0x010
-	u32 initial_gp; // 0x014
-	u32 load_address; // 0x018
-	u32 file_size; // 0x01C excluding 0x800-byte header
-	u32 unk0; // 0x020
-	u32 unk1; // 0x024
-	u32 memfill_start; // 0x028
-	u32 memfill_size; // 0x02C
-	u32 initial_sp_base; // 0x030
-	u32 initial_sp_offset; // 0x034
-	u32 reserved[5]; // 0x038-0x04B
-	char marker[0x7B4]; // 0x04C-0x7FF
-};
-static_assert(sizeof(PSXEXEHeader) == 0x800);
-#pragma pack(pop)
-
 ElfObject::ElfObject() = default;
 
 ElfObject::~ElfObject() = default;

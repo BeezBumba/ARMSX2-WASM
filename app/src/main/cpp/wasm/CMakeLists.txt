@@ -7,10 +7,12 @@ endif()
 add_executable(armsx2-wasm-bootstrap
 	wasm_main.cpp
 	ir_interpreter.cpp
+	program_loader.cpp
 )
 
 target_include_directories(armsx2-wasm-bootstrap PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_SOURCE_DIR}
 )
 
 target_compile_features(armsx2-wasm-bootstrap PRIVATE cxx_std_20)
@@ -29,7 +31,8 @@ target_link_options(armsx2-wasm-bootstrap PRIVATE
 	"SHELL:-sFULL_ES3=1"
 	"SHELL:-sALLOW_MEMORY_GROWTH=1"
 	"SHELL:-sFORCE_FILESYSTEM=1"
-	"SHELL:-sEXPORTED_RUNTIME_METHODS=['FS']"
+	"SHELL:-sEXPORTED_FUNCTIONS=['_malloc','_free','_armsx2_wasm_load_program','_armsx2_wasm_get_program_summary']"
+	"SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','UTF8ToString']"
 	"SHELL:--pre-js ${CMAKE_CURRENT_SOURCE_DIR}/wasm_host.js"
 	"SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/index.html"
 )

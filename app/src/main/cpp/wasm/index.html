@@ -23,6 +23,42 @@
       font-size: 0.95rem;
     }
 
+    #toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0 1rem 0.75rem;
+    }
+
+    #toolbar input,
+    #toolbar button {
+      font: inherit;
+    }
+
+    #toolbar button {
+      padding: 0.45rem 0.85rem;
+      border: 0;
+      border-radius: 0.4rem;
+      background: #3e6cb7;
+      color: #f6f8fc;
+      cursor: pointer;
+    }
+
+    #toolbar button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #program-info {
+      margin: 0;
+      padding: 0 1rem 0.75rem;
+      white-space: pre-wrap;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      color: #b9c8df;
+    }
+
     #canvas {
       flex: 1;
       width: 100%;
@@ -32,12 +68,20 @@
 </head>
 <body>
   <div id="status">ARMSX2 WASM bootstrap: SDL3 + WebGL2 scaffold loading…</div>
+  <div id="toolbar">
+    <input id="program-file" type="file" accept=".elf,.bin,.exe,.psx">
+    <button id="load-program" type="button" disabled>Load executable</button>
+  </div>
+  <pre id="program-info">No executable loaded yet.</pre>
   <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
   <script>
     var Module = typeof Module !== 'undefined' ? Module : {};
     Module.canvas = document.getElementById('canvas');
     Module.setStatus = function (text) {
       document.getElementById('status').textContent = text;
+    };
+    Module.setProgramInfo = function (text) {
+      document.getElementById('program-info').textContent = text;
     };
     Module.monitorRunDependencies = function (left) {
       Module.setStatus(left ? ('Preparing assets (' + left + ' remaining)…') : 'Running bootstrap…');
