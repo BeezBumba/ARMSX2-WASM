@@ -26,7 +26,11 @@ Module.preRun.push(function () {
 
 Module.onExit = function () {
   if (typeof FS !== 'undefined') {
-    FS.syncfs(false, function () {});
+    FS.syncfs(false, function (err) {
+      if (err) {
+        console.error('Final IDBFS sync failed', err);
+      }
+    });
   }
 };
 

@@ -1,7 +1,5 @@
 #include "ir_interpreter.h"
 
-#include <algorithm>
-
 namespace armsx2::wasm
 {
 void IRInterpreter::Execute(const IRProgram& program, IRExecutionState& state) const
@@ -31,11 +29,8 @@ void IRInterpreter::Execute(const IRProgram& program, IRExecutionState& state) c
 				break;
 
 			case IROpcode::StoreColor:
-			{
-				const std::size_t channel = std::min<std::size_t>(instruction.dst, state.color.size() - 1);
-				if (instruction.src0 < state.registers.size())
-					state.color[channel] = state.registers[instruction.src0];
-			}
+				if (instruction.dst < state.color.size() && instruction.src0 < state.registers.size())
+					state.color[instruction.dst] = state.registers[instruction.src0];
 			break;
 
 			case IROpcode::Halt:
