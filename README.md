@@ -28,7 +28,7 @@ emcmake cmake -S <repo_root>/app/src/main/cpp -B /tmp/armsx2-wasm -DARMSX2_WASM_
 cmake --build /tmp/armsx2-wasm
 ```
 
-This initial target is an infrastructure bootstrap: it creates web artifacts, opens an SDL3-backed WebGL2 canvas, mounts IDBFS for persistence, and runs a minimal portable IR interpreter sample. It does not yet build the full emulator core.
+This initial target is an infrastructure bootstrap: it creates web artifacts, opens an SDL3-backed WebGL2 canvas, mounts IDBFS for persistence, supports browser-backed BIOS/disc image selection via WORKERFS (including `.iso` imports up to 4.7 GB without copying the whole image into the WASM heap), and runs a minimal portable IR interpreter sample. It does not yet build the full emulator core.
 
 ## Project Details
 

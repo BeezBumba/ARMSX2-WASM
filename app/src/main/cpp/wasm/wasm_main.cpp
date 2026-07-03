@@ -10,13 +10,22 @@
 #include <GLES3/gl3.h>
 
 #include <array>
+#include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <sstream>
 #include <span>
+#include <string>
+#include <string_view>
+#include <sys/stat.h>
 
 namespace
 {
+constexpr std::uint64_t s_max_browser_disc_bytes = 4700000000ull;
+
 struct WasmBootstrapApp
 {
 	SDL_Window* window = nullptr;
@@ -26,10 +35,170 @@ struct WasmBootstrapApp
 	armsx2::wasm::IRExecutionState state;
 	armsx2::wasm::ProgramLoader loader;
 	armsx2::wasm::LoadedProgramImage loaded_program;
+	std::string browser_file_summary;
 };
 
 WasmBootstrapApp g_app;
 bool g_running = true;
+
+enum class BrowserFileKind
+{
+	Bios,
+	Game,
+};
+
+std::string_view GetFileName(std::string_view path)
+{
+	const size_t separator = path.find_last_of('/');
+	return (separator == std::string_view::npos) ? path : path.substr(separator + 1);
+}
+
+std::string FormatByteSize(std::uint64_t size)
+{
+	static constexpr const char* units[] = {"bytes", "KiB", "MiB", "GiB", "TiB"};
+	double value = static_cast<double>(size);
+	size_t unit_index = 0;
+	while (value >= 1024.0 && unit_index < (std::size(units) - 1))
+	{
+		value /= 1024.0;
+		unit_index++;
+	}
+
+	std::ostringstream stream;
+	stream.setf(std::ios::fixed, std::ios::floatfield);
+	stream.precision(unit_index == 0 ? 0 : 2);
+	stream << value << ' ' << units[unit_index] << " (" << size << " bytes)";
+	return stream.str();
+}
+
+std::string TrimAscii(std::string_view value)
+{
+	size_t start = 0;
+	while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start])))
+		start++;
+
+	size_t end = value.size();
+	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])))
+		end--;
+
+	return std::string(value.substr(start, end - start));
+}
+
+std::string BuildBrowserMountSummary(const char* mounted_path, BrowserFileKind kind, bool valid,
+	const char* result, const std::string& details, std::uint64_t size_bytes)
+{
+	std::ostringstream stream;
+	stream << "ARMSX2 WASM browser-backed file mount\n";
+	stream << "Kind: " << (kind == BrowserFileKind::Bios ? "BIOS image" : "Game image") << '\n';
+	stream << "Result: " << result << '\n';
+	stream << "Mounted path: " << mounted_path << '\n';
+	stream << "File name: " << GetFileName(mounted_path) << '\n';
+	stream << "Browser-backed mount: WORKERFS (read-only, on-demand reads, no JS heap copy)\n";
+	stream << "Size: " << FormatByteSize(size_bytes) << '\n';
+	if (kind == BrowserFileKind::Game)
+		stream << "Large file target: supports mounted disc images up to 4.7 GB.\n";
+	stream << details;
+	if (!details.empty() && details.back() != '\n')
+		stream << '\n';
+	stream << "Ready: " << (valid ? "yes" : "no") << '\n';
+	return stream.str();
+}
+
+bool TryInspectIso9660(const char* mounted_path, std::uint64_t size_bytes, std::string* details)
+{
+	if (size_bytes < (17ull * 2048ull))
+		return false;
+
+	FILE* file = std::fopen(mounted_path, "rb");
+	if (!file)
+		return false;
+
+	std::array<std::uint8_t, 2048> sector = {};
+	const bool seek_ok = (fseeko(file, static_cast<off_t>(16 * 2048), SEEK_SET) == 0);
+	const size_t bytes_read = seek_ok ? std::fread(sector.data(), 1, sector.size(), file) : 0;
+	std::fclose(file);
+
+	if (!seek_ok || bytes_read != sector.size())
+		return false;
+
+	if (sector[0] != 1 || std::memcmp(sector.data() + 1, "CD001", 5) != 0)
+		return false;
+
+	const std::string volume_id = TrimAscii(std::string_view(reinterpret_cast<const char*>(sector.data() + 40), 32));
+	std::ostringstream stream;
+	stream << "Detected format: ISO9660 primary volume descriptor\n";
+	if (!volume_id.empty())
+		stream << "Volume ID: " << volume_id << '\n';
+	else
+		stream << "Volume ID: <blank>\n";
+	stream << "Probe: sector 16 header read through the browser-backed mount\n";
+	*details = stream.str();
+	return true;
+}
+
+bool StatMountedFile(const char* mounted_path, std::uint64_t* size_bytes, std::string* error)
+{
+	struct stat file_stats = {};
+	if (stat(mounted_path, &file_stats) != 0)
+	{
+		if (error)
+			*error = "Failed to stat the mounted browser file.";
+		return false;
+	}
+
+	if (file_stats.st_size < 0)
+	{
+		if (error)
+			*error = "Mounted file size is invalid.";
+		return false;
+	}
+
+	*size_bytes = static_cast<std::uint64_t>(file_stats.st_size);
+	return true;
+}
+
+int MountBrowserFile(const char* mounted_path, BrowserFileKind kind)
+{
+	if (!mounted_path || mounted_path[0] == '\0')
+	{
+		g_app.browser_file_summary = BuildBrowserMountSummary("<none>", kind, false, "failed",
+			"Error: No mounted browser file path was provided.\n", 0);
+		return 0;
+	}
+
+	std::uint64_t size_bytes = 0;
+	std::string error;
+	if (!StatMountedFile(mounted_path, &size_bytes, &error))
+	{
+		g_app.browser_file_summary = BuildBrowserMountSummary(
+			mounted_path, kind, false, "failed", std::string("Error: ") + error + '\n', 0);
+		return 0;
+	}
+
+	std::string details;
+	bool valid = true;
+	const char* result = "mounted";
+	if (kind == BrowserFileKind::Game)
+	{
+		if (size_bytes > s_max_browser_disc_bytes)
+		{
+			valid = false;
+			result = "failed";
+			details = "Error: Game image exceeds the current 4.7 GB browser import limit.\n";
+		}
+		else if (!TryInspectIso9660(mounted_path, size_bytes, &details))
+		{
+			details = "Detected format: browser-backed disc image\nProbe: mounted for future disc reads without copying the full image into memory\n";
+		}
+	}
+	else
+	{
+		details = "Detected format: browser-backed BIOS candidate\nProbe: mounted for future BIOS file access without copying the ROM into the WASM heap\n";
+	}
+
+	g_app.browser_file_summary = BuildBrowserMountSummary(mounted_path, kind, valid, result, details, size_bytes);
+	return valid ? 1 : 0;
+}
 
 bool InitializeApp()
 {
@@ -143,6 +312,30 @@ EMSCRIPTEN_KEEPALIVE
 const char* armsx2_wasm_get_program_summary()
 {
 	return g_app.loaded_program.summary.c_str();
+}
+
+#if defined(__EMSCRIPTEN__)
+EMSCRIPTEN_KEEPALIVE
+#endif
+int armsx2_wasm_mount_bios(const char* mounted_path)
+{
+	return MountBrowserFile(mounted_path, BrowserFileKind::Bios);
+}
+
+#if defined(__EMSCRIPTEN__)
+EMSCRIPTEN_KEEPALIVE
+#endif
+int armsx2_wasm_mount_game(const char* mounted_path)
+{
+	return MountBrowserFile(mounted_path, BrowserFileKind::Game);
+}
+
+#if defined(__EMSCRIPTEN__)
+EMSCRIPTEN_KEEPALIVE
+#endif
+const char* armsx2_wasm_get_browser_file_summary()
+{
+	return g_app.browser_file_summary.c_str();
 }
 }
 
