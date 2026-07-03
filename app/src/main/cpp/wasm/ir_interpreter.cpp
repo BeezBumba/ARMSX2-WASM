@@ -31,7 +31,7 @@ void IRInterpreter::Execute(const IRProgram& program, IRExecutionState& state) c
 			case IROpcode::StoreColor:
 				if (instruction.dst < state.color.size() && instruction.src0 < state.registers.size())
 					state.color[instruction.dst] = state.registers[instruction.src0];
-			break;
+				break;
 
 			case IROpcode::Halt:
 				return;

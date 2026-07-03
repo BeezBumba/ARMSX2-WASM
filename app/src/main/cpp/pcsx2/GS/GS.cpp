@@ -618,6 +618,7 @@ std::vector<GSAdapterInfo> GSGetAdapterInfo(GSRendererType renderer)
 #endif
 
 		case GSRendererType::WebGL2:
+			// WebGL2 currently reuses the OpenGL device path and does not expose adapters here.
 			break;
 
 		default:
