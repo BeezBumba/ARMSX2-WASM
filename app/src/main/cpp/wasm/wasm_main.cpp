@@ -24,6 +24,7 @@
 
 namespace
 {
+// Cap browser-backed disc imports at the common single-layer DVD size target requested for this bootstrap work.
 constexpr std::uint64_t s_max_browser_disc_bytes = 4700000000ull;
 
 struct WasmBootstrapApp
