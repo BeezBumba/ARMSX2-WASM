@@ -353,8 +353,8 @@ int armsx2_wasm_load_program(const std::uint8_t* data, size_t size)
 			std::ostringstream ir_out;
 			ir_out << "--- EE IR Pipeline ---\n";
 			ir_out << "Entry PC: 0x" << std::hex << g_app.loaded_program.entry_point << "\n";
-			ir_out << "Block range: 0x" << g_app.ee_lifted_block.start_pc
-				   << " .. 0x" << g_app.ee_lifted_block.end_pc << "\n" << std::dec;
+			ir_out << "Block range: 0x" << std::hex << g_app.ee_lifted_block.start_pc
+				   << " .. 0x" << std::hex << g_app.ee_lifted_block.end_pc << std::dec << "\n";
 			ir_out << "IR nodes emitted: " << g_app.ee_lifted_block.instructions.size() << "\n";
 			ir_out << "IR nodes executed: " << run_result.instructions_run << "\n";
 			ir_out << "Next PC: 0x" << std::hex << run_result.next_pc << "\n" << std::dec;

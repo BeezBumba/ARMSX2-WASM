@@ -617,11 +617,11 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 			if (state.ReadGPR(n.src0).u64[0] == state.ReadGPR(n.src1).u64[0])
 			{
 				branch_taken = true;
-				// Branch offset is relative to the delay-slot PC, which is pc+4 from the branch.
-				// The lifter stored (imm16 * 4) as the offset relative to the delay-slot PC.
-				// We compute: target = block.start_pc + (branch_instruction_index * 4) + 4 + offset
-				// But for simplicity, since we embedded the offset, we use end_pc of the block
-				// minus 4 (the delay slot) as the reference PC.
+				// The branch is the second-to-last instruction in the block
+				// (last is the delay slot).  block.end_pc points past the delay
+				// slot, so (end_pc - 4) is the delay-slot PC, which is also the
+				// PC of the instruction after the branch — the standard MIPS
+				// reference point for branch offsets.
 				branch_target = static_cast<std::uint32_t>(
 					static_cast<std::int64_t>(block.end_pc - 4) + n.imm);
 			}

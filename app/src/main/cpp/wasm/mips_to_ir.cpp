@@ -136,7 +136,6 @@ const char* EEIROpName(EEIROp op)
 		case EEIROp::Tlbp:      return "Tlbp";
 		case EEIROp::Di:        return "Di";
 		case EEIROp::Ei:        return "Ei";
-		case EEIROp::Eret:      return "Eret";
 
 		case EEIROp::Mfc1:      return "Mfc1";
 		case EEIROp::Mtc1:      return "Mtc1";
