@@ -19,12 +19,12 @@ ARMSX2 allows you to play PS2 games on Android, iOS, Linux, macOS, and Windows d
 
 ## WASM Bootstrap
 
-A standalone SDL3/WebGL2 bootstrap target now lives under `/home/runner/work/ARMSX2-WASM/ARMSX2-WASM/app/src/main/cpp/wasm`.
+A standalone SDL3/WebGL2 bootstrap target now lives under `app/src/main/cpp/wasm`.
 
 To configure the scaffold with Emscripten:
 
 ```sh
-emcmake cmake -S /home/runner/work/ARMSX2-WASM/ARMSX2-WASM/app/src/main/cpp -B /tmp/armsx2-wasm -DARMSX2_WASM_BOOTSTRAP=ON
+emcmake cmake -S <repo_root>/app/src/main/cpp -B /tmp/armsx2-wasm -DARMSX2_WASM_BOOTSTRAP=ON
 cmake --build /tmp/armsx2-wasm
 ```
 
