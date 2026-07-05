@@ -49,6 +49,7 @@ u32 TranslateEEAddress(u32 virtual_address)
 		}
 	}
 
+	// KSEG0/KSEG1 direct-mapped fallback for the current bootstrap memory model.
 	return virtual_address & 0x1FFFFFFF;
 }
 
@@ -311,18 +312,7 @@ bool LoadBootstrapBiosImage(const char* mounted_path, std::string* error)
 		return false;
 	}
 
-	s_bios_image.assign(image.size(), 0);
-	std::string write_error;
-	if (!WriteBootstrapEEMemory(s_bios_base_address,
-			std::span<const u8>(image.data(), image.size()),
-			&write_error))
-	{
-		s_bios_image.clear();
-		if (error)
-			*error = write_error.empty() ? "Failed to map BIOS image into EE bootstrap memory." : write_error;
-		return false;
-	}
-
+	s_bios_image = std::move(image);
 	return true;
 }
 
