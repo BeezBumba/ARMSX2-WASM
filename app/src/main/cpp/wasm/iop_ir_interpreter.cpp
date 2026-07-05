@@ -425,13 +425,14 @@ IopIRInterpreter::RunResult IopIRInterpreter::Execute(const IOPIRBlock& block, I
 
     // Check for pending IOP interrupts at the block boundary.
     // An interrupt is pending when (I_STAT & I_MASK) != 0 and the IOP COP0
-    // Status IE bit (bit 0) is set.  We surface the flag to the caller to
+    // Status IEc bit (bit 0) is set.  We surface the flag to the caller to
     // decide whether to vector to the exception handler (0x80000080).
+    // (On exception entry the hardware clears IEc to prevent re-entry, so
+    // the flag will not re-fire while the handler is running.)
     if (hw && hw->AnyPending())
     {
-        const bool ie = (state.cop0[12] & 1u) != 0;      // Status.IE
-        const bool exl = (state.cop0[12] & 2u) != 0;     // Status.EXL (R3000A: KUc)
-        if (ie && !exl)
+        const bool iec = (state.cop0[12] & 1u) != 0;  // Status[0]: IEc (current interrupt enable)
+        if (iec)
             result.interrupt_pending = true;
     }
 
