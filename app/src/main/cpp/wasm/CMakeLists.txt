@@ -11,6 +11,7 @@ add_executable(armsx2-wasm-bootstrap
 	wasm_memory.cpp
 	mips_to_ir.cpp
 	ee_ir_interpreter.cpp
+	ee_hw_regs.cpp
 	iop_to_ir.cpp
 	iop_ir_interpreter.cpp
 )

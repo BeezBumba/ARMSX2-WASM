@@ -16,6 +16,15 @@ std::uint32_t ToPhys(std::uint32_t vaddr)
 {
 	return vaddr & 0x1FFFFFFF;
 }
+
+// Hardware register range: 0x10000000–0x1000FFFF (EE I/O registers)
+constexpr std::uint32_t HW_REG_BASE = 0x10000000u;
+constexpr std::uint32_t HW_REG_END  = 0x10010000u;
+
+inline bool IsHWReg(std::uint32_t pa)
+{
+	return pa >= HW_REG_BASE && pa < HW_REG_END;
+}
 } // anonymous namespace
 
 std::uint8_t EEIRInterpreter::ReadMem8(const std::uint8_t* mem, std::uint32_t sz, std::uint32_t vaddr)
@@ -80,10 +89,27 @@ void EEIRInterpreter::WriteMem64(std::uint8_t* mem, std::uint32_t sz, std::uint3
 // ============================================================================
 EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 	const EEIRBlock& block, EEState& state,
-	std::uint8_t* ee_memory, std::uint32_t ee_memory_size) const
+	std::uint8_t* ee_memory, std::uint32_t ee_memory_size,
+	EEHWRegs* hw) const
 {
 	RunResult result;
 	result.next_pc = block.end_pc; // default: fall through
+
+	// --------------------------------------------------------------------------
+	// Hardware-aware memory access lambdas.
+	// Reads/writes to 0x10000000–0x1000FFFF are routed to the EE HW register
+	// state (INTC, timers, etc.) instead of flat RAM.
+	// --------------------------------------------------------------------------
+	auto read32 = [&](std::uint32_t vaddr) -> std::uint32_t {
+		const std::uint32_t pa = ToPhys(vaddr);
+		if (hw && IsHWReg(pa)) return hw->Read32(pa);
+		return ReadMem32(ee_memory, ee_memory_size, vaddr);
+	};
+	auto write32 = [&](std::uint32_t vaddr, std::uint32_t val) {
+		const std::uint32_t pa = ToPhys(vaddr);
+		if (hw && IsHWReg(pa)) { hw->Write32(pa, val); return; }
+		WriteMem32(ee_memory, ee_memory_size, vaddr, val);
+	};
 
 	// Delay-slot tracking.  When a branch IR node is encountered we record the
 	// target but don't change PC until the block ends.
@@ -567,14 +593,14 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 		case EEIROp::LW:
 		{
 			const std::uint32_t addr = state.ReadGPR(n.src0).u32[0] + static_cast<std::int16_t>(n.imm);
-			state.WriteGPR32(n.dst, static_cast<std::int32_t>(ReadMem32(ee_memory, ee_memory_size, addr)));
+			state.WriteGPR32(n.dst, static_cast<std::int32_t>(read32(addr)));
 			break;
 		}
 
 		case EEIROp::LWU:
 		{
 			const std::uint32_t addr = state.ReadGPR(n.src0).u32[0] + static_cast<std::int16_t>(n.imm);
-			state.WriteGPR64(n.dst, static_cast<std::int64_t>(static_cast<std::uint32_t>(ReadMem32(ee_memory, ee_memory_size, addr))));
+			state.WriteGPR64(n.dst, static_cast<std::int64_t>(static_cast<std::uint32_t>(read32(addr))));
 			break;
 		}
 
@@ -604,7 +630,7 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 			// Simplified: just do an aligned load for now.
 			const std::uint32_t addr = state.ReadGPR(n.src0).u32[0] + static_cast<std::int16_t>(n.imm);
 			if (n.op == EEIROp::LWL || n.op == EEIROp::LWR)
-				state.WriteGPR32(n.dst, static_cast<std::int32_t>(ReadMem32(ee_memory, ee_memory_size, addr & ~3u)));
+				state.WriteGPR32(n.dst, static_cast<std::int32_t>(read32(addr & ~3u)));
 			else
 				state.WriteGPR64(n.dst, static_cast<std::int64_t>(ReadMem64(ee_memory, ee_memory_size, addr & ~7u)));
 			break;
@@ -629,7 +655,7 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 		case EEIROp::SW:
 		{
 			const std::uint32_t addr = state.ReadGPR(n.dst).u32[0] + static_cast<std::int16_t>(n.imm);
-			WriteMem32(ee_memory, ee_memory_size, addr, state.ReadGPR(n.src0).u32[0]);
+			write32(addr, state.ReadGPR(n.src0).u32[0]);
 			break;
 		}
 
@@ -653,7 +679,7 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 		case EEIROp::SWR:
 		{
 			const std::uint32_t addr = state.ReadGPR(n.dst).u32[0] + static_cast<std::int16_t>(n.imm);
-			WriteMem32(ee_memory, ee_memory_size, addr & ~3u, state.ReadGPR(n.src0).u32[0]);
+			write32(addr & ~3u, state.ReadGPR(n.src0).u32[0]);
 			break;
 		}
 
@@ -995,7 +1021,7 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 			const std::uint32_t addr = state.ReadGPR(n.src0).u32[0] + static_cast<std::int16_t>(n.imm);
 			const unsigned fpr_idx = n.dst - 64;
 			if (fpr_idx < 32)
-				state.fpr[fpr_idx].u32 = ReadMem32(ee_memory, ee_memory_size, addr);
+				state.fpr[fpr_idx].u32 = read32(addr);
 			break;
 		}
 
@@ -1004,7 +1030,7 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 			const std::uint32_t addr = state.ReadGPR(n.dst).u32[0] + static_cast<std::int16_t>(n.imm);
 			const unsigned fpr_idx = n.src0 - 64;
 			if (fpr_idx < 32)
-				WriteMem32(ee_memory, ee_memory_size, addr, state.fpr[fpr_idx].u32);
+				write32(addr, state.fpr[fpr_idx].u32);
 			break;
 		}
 
@@ -1944,6 +1970,18 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 	// Apply branch result.
 	if (branch_taken)
 		result.next_pc = branch_target;
+
+	// Tick timers and check for pending interrupts at the block boundary.
+	// A real EE would check COP0.Status.IE + COP0.Status.EXL here too, but for
+	// the bootstrap interpreter we surface the flag to the caller so it can
+	// decide whether to vector to the interrupt handler.
+	if (hw)
+	{
+		// Approximate bus cycles: instructions * 2 (EE runs at ~300 MHz, bus ~150 MHz)
+		hw->TickTimers(result.instructions_run * 2);
+		if (hw->AnyPending())
+			result.interrupt_pending = true;
+	}
 
 	return result;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ee_hw_regs.h"
 #include "ee_state.h"
 #include "ir_bytecode.h"
 
@@ -22,13 +23,17 @@ public:
 		std::uint32_t next_pc = 0;         // PC to continue from after this block
 		std::uint32_t instructions_run = 0;
 		bool halted = false;               // hit BREAK / unhandled trap
+		bool interrupt_pending = false;    // unmasked INTC interrupt raised
 		std::string error;                 // non-empty on fatal error
 	};
 
 	// Execute one IR block.  On return, `state.pc` has NOT been updated — the
 	// caller should set `state.pc = result.next_pc` to advance execution.
+	// Pass a non-null `hw` to enable hardware register dispatch (INTC, timers)
+	// and interrupt checking at block boundaries.
 	RunResult Execute(const EEIRBlock& block, EEState& state,
-					  std::uint8_t* ee_memory, std::uint32_t ee_memory_size) const;
+					  std::uint8_t* ee_memory, std::uint32_t ee_memory_size,
+					  EEHWRegs* hw = nullptr) const;
 
 private:
 	// Memory helpers (flat physical model: addr & 0x1FFF'FFFF).
