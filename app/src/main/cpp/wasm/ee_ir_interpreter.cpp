@@ -3,8 +3,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <limits>
+#include <span>
 
 namespace armsx2::wasm
 {
@@ -182,6 +184,25 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 		r.u32[3] = state.hi.u32[2];
 		state.WriteGPR(dst, r);
 	};
+	auto read128 = [&](std::uint32_t vaddr) -> EEGPReg
+	{
+		EEGPReg value = {};
+		if (ReadBootstrapEEMemory(vaddr, reinterpret_cast<u8*>(&value), sizeof(value)))
+			return value;
+		const std::uint32_t pa = ToPhys(vaddr);
+		if (pa + sizeof(value) <= ee_memory_size)
+			std::memcpy(&value, ee_memory + pa, sizeof(value));
+		return value;
+	};
+	auto write128 = [&](std::uint32_t vaddr, const EEGPReg& value)
+	{
+		std::string unused_error;
+		if (WriteBootstrapEEMemory(vaddr, std::span<const u8>(reinterpret_cast<const u8*>(&value), sizeof(value)), &unused_error))
+			return;
+		const std::uint32_t pa = ToPhys(vaddr);
+		if (pa + sizeof(value) <= ee_memory_size)
+			std::memcpy(ee_memory + pa, &value, sizeof(value));
+	};
 
 	for (size_t i = 0; i < block.instructions.size(); i++)
 	{
@@ -196,6 +217,16 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 		case EEIROp::Pref:
 		case EEIROp::Sync:
 			break;
+
+		case EEIROp::Unimplemented:
+			result.halted = true;
+			result.error = "Unimplemented EE instruction 0x" + [] (std::uint32_t word)
+			{
+				char buf[11] = {};
+				std::snprintf(buf, sizeof(buf), "%08X", word);
+				return std::string(buf);
+			}(static_cast<std::uint32_t>(n.imm));
+			return result;
 
 		case EEIROp::Halt:
 			result.halted = true;
@@ -1154,12 +1185,72 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 			// For now, ignore traps (most games don't trigger them).
 			break;
 
-		// ---- COP2 / LQC2 / SQC2 placeholder --------------------------------
+		// ---- COP2 / LQC2 / SQC2 --------------------------------------------
 		case EEIROp::COP2:
-		case EEIROp::LQC2:
-		case EEIROp::SQC2:
-			// Stub — VU0 macro mode will be added later.
+		{
+			const std::uint32_t op = static_cast<std::uint32_t>(n.imm);
+			const std::uint32_t rs = (op >> 21) & 0x1F;
+			const std::uint32_t rt = (op >> 16) & 0x1F;
+			const std::uint32_t rd = (op >> 11) & 0x1F;
+			switch (rs)
+			{
+				case 0x01: // QMFC2 rt, vf[rd]
+					state.WriteGPR(rt, state.vu0_vf[rd]);
+					break;
+				case 0x02: // CFC2 rt, vi[rd]
+					state.WriteGPR32(rt, static_cast<std::int32_t>(state.vu0_vi[rd]));
+					break;
+				case 0x05: // QMTC2 rt, vf[rd]
+					state.vu0_vf[rd] = state.ReadGPR(rt);
+					break;
+				case 0x06: // CTC2 rt, vi[rd]
+					state.vu0_vi[rd] = state.ReadGPR(rt).u32[0];
+					if (rd == 31)
+						state.vu0_condition = (state.vu0_vi[rd] & 1u) != 0;
+					break;
+				case 0x08: // BC2F/BC2T/BC2FL/BC2TL
+				{
+					bool cond = state.vu0_condition;
+					if ((rt & 0x1u) == 0)
+						cond = !cond;
+					if (cond)
+					{
+						const std::int64_t offset = static_cast<std::int16_t>(op & 0xFFFF) * 4ll;
+						branch_taken = true;
+						branch_target = static_cast<std::uint32_t>(
+							static_cast<std::int64_t>(block.end_pc - 4) + offset);
+					}
+					break;
+				}
+				default:
+					// VU0 macro-op stream: keep execution moving; stateful data movement
+					// enters through QMTC2/QMFC2/CTC2/CFC2/LQC2/SQC2 above.
+					break;
+			}
 			break;
+		}
+
+		case EEIROp::LQC2:
+		{
+			const std::uint32_t op = static_cast<std::uint32_t>(n.imm);
+			const std::uint32_t vt = (op >> 16) & 0x1F;
+			const std::uint32_t base = (n.src0 != EEIRReg::INVALID) ? state.ReadGPR(n.src0).u32[0]
+				: state.ReadGPR((op >> 21) & 0x1F).u32[0];
+			const std::uint32_t addr = base + static_cast<std::int16_t>(op & 0xFFFF);
+			state.vu0_vf[vt] = read128(addr);
+			break;
+		}
+
+		case EEIROp::SQC2:
+		{
+			const std::uint32_t op = static_cast<std::uint32_t>(n.imm);
+			const std::uint32_t vt = (op >> 16) & 0x1F;
+			const std::uint32_t base = (n.src0 != EEIRReg::INVALID) ? state.ReadGPR(n.src0).u32[0]
+				: state.ReadGPR((op >> 21) & 0x1F).u32[0];
+			const std::uint32_t addr = base + static_cast<std::int16_t>(op & 0xFFFF);
+			write128(addr, state.vu0_vf[vt]);
+			break;
+		}
 
 		// ---- MMI pipeline 1 HI1/LO1 ----------------------------------------
 		case EEIROp::Mfhi1:
@@ -1853,10 +1944,51 @@ EEIRInterpreter::RunResult EEIRInterpreter::Execute(
 		case EEIROp::Pmsubh:
 		case EEIROp::Phmadh:
 		case EEIROp::Phmsbh:
-		case EEIROp::Pmsubw:
-			// TODO: Complex MMI multiply/accumulate variants can be filled out further
-			// from PCSX2 MMI.cpp if software execution starts depending on them.
+		{
+			const EEGPReg& rs = state.ReadGPR(n.src0);
+			const EEGPReg& rt = state.ReadGPR(n.src1);
+			for (int lane = 0; lane < 2; ++lane)
+			{
+				const int base = lane * 4;
+				const std::int64_t term0 = static_cast<std::int64_t>(rs.s16[base]) * rt.s16[base];
+				const std::int64_t term1 = static_cast<std::int64_t>(rs.s16[base + 1]) * rt.s16[base + 1];
+				const std::int64_t term2 = static_cast<std::int64_t>(rs.s16[base + 2]) * rt.s16[base + 2];
+				const std::int64_t term3 = static_cast<std::int64_t>(rs.s16[base + 3]) * rt.s16[base + 3];
+				std::int64_t delta = 0;
+				if (n.op == EEIROp::Phmsbh)
+					delta = (term0 - term1) + (term2 - term3);
+				else
+					delta = term0 + term1 + term2 + term3;
+
+				const int lo_idx = lane * 2;
+				std::int64_t acc = static_cast<std::uint64_t>(state.lo.u32[lo_idx]) |
+					(static_cast<std::uint64_t>(state.hi.u32[lo_idx]) << 32);
+				if (n.op == EEIROp::Pmsubh)
+					acc -= delta;
+				else
+					acc += delta;
+				state.lo.s64[lane] = static_cast<std::int32_t>(acc);
+				state.hi.s64[lane] = static_cast<std::int32_t>(acc >> 32);
+			}
+			write_lohi_even_words(n.dst);
 			break;
+		}
+
+		case EEIROp::Pmsubw:
+		{
+			for (int lane = 0; lane < 2; ++lane)
+			{
+				const int src_lane = lane * 2;
+				std::int64_t acc = static_cast<std::uint64_t>(state.lo.u32[src_lane]) |
+					(static_cast<std::uint64_t>(state.hi.u32[src_lane]) << 32);
+				acc -= static_cast<std::int64_t>(state.ReadGPR(n.src0).s32[src_lane]) *
+					static_cast<std::int64_t>(state.ReadGPR(n.src1).s32[src_lane]);
+				state.lo.s64[lane] = static_cast<std::int32_t>(acc);
+				state.hi.s64[lane] = static_cast<std::int32_t>(acc >> 32);
+			}
+			write_lohi_even_words(n.dst);
+			break;
+		}
 
 		case EEIROp::MmiPmfhi:
 			state.WriteGPR(n.dst, state.hi);

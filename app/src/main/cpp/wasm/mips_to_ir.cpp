@@ -15,6 +15,7 @@ const char* EEIROpName(EEIROp op)
 	switch (op)
 	{
 		case EEIROp::Nop:       return "Nop";
+		case EEIROp::Unimplemented: return "Unimplemented";
 		case EEIROp::Halt:      return "Halt";
 		case EEIROp::BlockEnd:  return "BlockEnd";
 		case EEIROp::Syscall:   return "Syscall";
@@ -326,6 +327,12 @@ void Emit(EEIRBlock& block, EEIROp op, std::uint8_t dst = EEIRReg::INVALID,
 		  std::int64_t imm = 0)
 {
 	block.instructions.push_back({op, dst, src0, src1, imm});
+}
+
+void EmitUnimplemented(EEIRBlock& block, std::uint32_t op)
+{
+	Emit(block, EEIROp::Unimplemented, EEIRReg::INVALID, EEIRReg::INVALID, EEIRReg::INVALID,
+		 static_cast<std::int64_t>(op));
 }
 
 // Read a 32-bit little-endian word from memory at a physical address.
@@ -663,8 +670,8 @@ bool MipsLifter::DecodeInstruction(std::uint32_t op, std::uint32_t pc, EEIRBlock
 			return false;
 
 		default:
-			// Unknown / unimplemented primary opcode — emit nop and continue.
-			Emit(block, EEIROp::Nop);
+			// Unknown / unimplemented primary opcode.
+			EmitUnimplemented(block, op);
 			return false;
 	}
 }
@@ -882,7 +889,7 @@ bool MipsLifter::DecodeSpecial(std::uint32_t op, std::uint32_t pc, EEIRBlock& bl
 			return false;
 
 		default:
-			Emit(block, EEIROp::Nop);
+			EmitUnimplemented(block, op);
 			return false;
 	}
 }
@@ -948,7 +955,7 @@ bool MipsLifter::DecodeRegImm(std::uint32_t op, std::uint32_t pc, EEIRBlock& blo
 			return false;
 
 		default:
-			Emit(block, EEIROp::Nop);
+			EmitUnimplemented(block, op);
 			return false;
 	}
 }
@@ -971,7 +978,7 @@ bool MipsLifter::DecodeCOP0(std::uint32_t op, std::uint32_t pc, EEIRBlock& block
 			return false;
 
 		case 0x08: // BC0 — not commonly used, treat as nop for now
-			Emit(block, EEIROp::Nop);
+			EmitUnimplemented(block, op);
 			return false;
 
 		case 0x10: // C0 (TLB / ERET)
@@ -986,12 +993,12 @@ bool MipsLifter::DecodeCOP0(std::uint32_t op, std::uint32_t pc, EEIRBlock& block
 				case 0x18: Emit(block, EEIROp::Eret); return true;
 				case 0x38: Emit(block, EEIROp::Ei); return false;
 				case 0x39: Emit(block, EEIROp::Di); return false;
-				default:   Emit(block, EEIROp::Nop); return false;
+				default:   EmitUnimplemented(block, op); return false;
 			}
 		}
 
 		default:
-			Emit(block, EEIROp::Nop);
+			EmitUnimplemented(block, op);
 			return false;
 	}
 }
@@ -1033,7 +1040,7 @@ bool MipsLifter::DecodeCOP1(std::uint32_t op, std::uint32_t pc, EEIRBlock& block
 				case 0x01: Emit(block, EEIROp::BC1T, EEIRReg::INVALID, EEIRReg::INVALID, EEIRReg::INVALID, offset); return true;
 				case 0x02: Emit(block, EEIROp::BC1FL, EEIRReg::INVALID, EEIRReg::INVALID, EEIRReg::INVALID, offset); return true;
 				case 0x03: Emit(block, EEIROp::BC1TL, EEIRReg::INVALID, EEIRReg::INVALID, EEIRReg::INVALID, offset); return true;
-				default: Emit(block, EEIROp::Nop); return false;
+				default: EmitUnimplemented(block, op); return false;
 			}
 		}
 
@@ -1076,7 +1083,7 @@ bool MipsLifter::DecodeCOP1(std::uint32_t op, std::uint32_t pc, EEIRBlock& block
 				case 0x36: Emit(block, EEIROp::FCmpLE, EEIRReg::INVALID, fs, ft); return false;
 
 				default:
-					Emit(block, EEIROp::Nop);
+					EmitUnimplemented(block, op);
 					return false;
 			}
 		}
@@ -1091,12 +1098,12 @@ bool MipsLifter::DecodeCOP1(std::uint32_t op, std::uint32_t pc, EEIRBlock& block
 				Emit(block, EEIROp::CvtSW, fd, fs);
 				return false;
 			}
-			Emit(block, EEIROp::Nop);
+			EmitUnimplemented(block, op);
 			return false;
 		}
 
 		default:
-			Emit(block, EEIROp::Nop);
+			EmitUnimplemented(block, op);
 			return false;
 	}
 }
@@ -1162,7 +1169,7 @@ case 0x1A: emit_rd_rs_rt(EEIROp::Pextlb); return false;
 case 0x1B: emit_rd_rs_rt(EEIROp::Ppacb); return false;
 case 0x1E: emit_rd_rt(EEIROp::Pext5); return false;
 case 0x1F: emit_rd_rt(EEIROp::Ppac5); return false;
-default: Emit(block, EEIROp::Nop); return false;
+default: EmitUnimplemented(block, op); return false;
 }
 }
 
@@ -1199,7 +1206,7 @@ case 0x18: emit_rd_rs_rt(EEIROp::Paddub); return false;
 case 0x19: emit_rd_rs_rt(EEIROp::Psubub); return false;
 case 0x1A: emit_rd_rs_rt(EEIROp::Pextub); return false;
 case 0x1B: emit_rd_rs_rt(EEIROp::Qfsrv); return false;
-default: Emit(block, EEIROp::Nop); return false;
+default: EmitUnimplemented(block, op); return false;
 }
 }
 
@@ -1231,7 +1238,7 @@ case 0x1C: emit_rd_rs_rt(EEIROp::Pmulth); return false;
 case 0x1D: Emit(block, EEIROp::Pdivbw, EEIRReg::INVALID, gpr(Rs(op)), gpr(Rt(op))); return false;
 case 0x1E: emit_rd_rt(EEIROp::Pexew); return false;
 case 0x1F: emit_rd_rt(EEIROp::Prot3w); return false;
-default: Emit(block, EEIROp::Nop); return false;
+default: EmitUnimplemented(block, op); return false;
 }
 }
 
@@ -1254,7 +1261,7 @@ case 0x13: emit_rd_rs_rt(EEIROp::Pnor); return false;
 case 0x1A: emit_rd_rt(EEIROp::Pexch); return false;
 case 0x1B: emit_rd_rt(EEIROp::Pcpyh); return false;
 case 0x1E: emit_rd_rt(EEIROp::Pexcw); return false;
-default: Emit(block, EEIROp::Nop); return false;
+default: EmitUnimplemented(block, op); return false;
 }
 }
 
@@ -1270,7 +1277,7 @@ case 0x3E: emit_shift(EEIROp::Psrlw); return false;
 case 0x3F: emit_shift(EEIROp::Psraw); return false;
 
 default:
-Emit(block, EEIROp::Nop);
+EmitUnimplemented(block, op);
 return false;
 }
 }

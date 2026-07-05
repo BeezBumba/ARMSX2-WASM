@@ -79,6 +79,7 @@ enum class EEIROp : std::uint16_t
 {
 	// -- Meta / Flow -----------------------------------------------------------
 	Nop = 0,
+	Unimplemented,      // emitted for decoded-but-not-yet-supported instructions
 	Halt,               // End of block, no branch
 	BlockEnd,           // End of block, branch target in imm
 	Syscall,

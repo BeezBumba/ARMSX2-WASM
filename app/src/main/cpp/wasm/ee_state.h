@@ -62,6 +62,11 @@ struct EEState
 	EEFPReg fpu_acc = {};   // FPU accumulator
 	bool fpu_condition = false;
 
+	// -- COP2 (VU0 macro-mode subset) --------------------------------------
+	std::array<EEGPReg, 32> vu0_vf = {};
+	std::array<std::uint32_t, 32> vu0_vi = {};
+	bool vu0_condition = false;
+
 	// -- Emulation bookkeeping ---------------------------------------------
 	std::uint32_t cycle = 0;
 	bool in_delay_slot = false;
