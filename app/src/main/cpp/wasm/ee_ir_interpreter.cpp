@@ -1,4 +1,5 @@
 #include "ee_ir_interpreter.h"
+#include "wasm_memory.h"
 
 #include <algorithm>
 #include <cmath>
@@ -29,35 +30,48 @@ inline bool IsHWReg(std::uint32_t pa)
 
 std::uint8_t EEIRInterpreter::ReadMem8(const std::uint8_t* mem, std::uint32_t sz, std::uint32_t vaddr)
 {
+	std::uint8_t value = 0;
+	if (ReadBootstrapEEMemory(vaddr, &value, sizeof(value)))
+		return value;
+
 	const std::uint32_t pa = ToPhys(vaddr);
 	return (pa < sz) ? mem[pa] : 0;
 }
 
 std::uint16_t EEIRInterpreter::ReadMem16(const std::uint8_t* mem, std::uint32_t sz, std::uint32_t vaddr)
 {
+	std::uint16_t value = 0;
+	if (ReadBootstrapEEMemory(vaddr, reinterpret_cast<u8*>(&value), sizeof(value)))
+		return value;
+
 	const std::uint32_t pa = ToPhys(vaddr);
 	if (pa + 2 > sz) return 0;
-	std::uint16_t v;
-	std::memcpy(&v, mem + pa, 2);
-	return v;
+	std::memcpy(&value, mem + pa, 2);
+	return value;
 }
 
 std::uint32_t EEIRInterpreter::ReadMem32(const std::uint8_t* mem, std::uint32_t sz, std::uint32_t vaddr)
 {
+	std::uint32_t value = 0;
+	if (ReadBootstrapEEMemory(vaddr, reinterpret_cast<u8*>(&value), sizeof(value)))
+		return value;
+
 	const std::uint32_t pa = ToPhys(vaddr);
 	if (pa + 4 > sz) return 0;
-	std::uint32_t v;
-	std::memcpy(&v, mem + pa, 4);
-	return v;
+	std::memcpy(&value, mem + pa, 4);
+	return value;
 }
 
 std::uint64_t EEIRInterpreter::ReadMem64(const std::uint8_t* mem, std::uint32_t sz, std::uint32_t vaddr)
 {
+	std::uint64_t value = 0;
+	if (ReadBootstrapEEMemory(vaddr, reinterpret_cast<u8*>(&value), sizeof(value)))
+		return value;
+
 	const std::uint32_t pa = ToPhys(vaddr);
 	if (pa + 8 > sz) return 0;
-	std::uint64_t v;
-	std::memcpy(&v, mem + pa, 8);
-	return v;
+	std::memcpy(&value, mem + pa, 8);
+	return value;
 }
 
 void EEIRInterpreter::WriteMem8(std::uint8_t* mem, std::uint32_t sz, std::uint32_t vaddr, std::uint8_t val)

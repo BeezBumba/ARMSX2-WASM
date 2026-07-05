@@ -70,6 +70,11 @@ struct EEHWRegs
 {
     std::uint32_t intc_stat = 0;    // INTC_STAT: pending interrupt bits
     std::uint32_t intc_mask = 0;    // INTC_MASK: enabled interrupt bits
+    std::uint32_t dmac_ctrl = 0;    // DMAC control (bootstrap stub)
+    std::uint32_t dmac_stat = 0;    // DMAC status (bootstrap stub)
+    std::uint32_t dmac_pcr  = 0;    // DMAC priority control (bootstrap stub)
+    std::uint32_t sif_msflag = 0;   // SIF EE->IOP flag (bootstrap stub)
+    std::uint32_t sif_smflag = 0;   // SIF IOP->EE flag (bootstrap stub)
     EERcnt        rcnt[4];          // RCNT0–RCNT3
 
     // --- VBlank helpers ------------------------------------------------------

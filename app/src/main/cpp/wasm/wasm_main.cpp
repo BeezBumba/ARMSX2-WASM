@@ -30,6 +30,8 @@
 #include <string>
 #include <string_view>
 #include <sys/stat.h>
+#include <unordered_map>
+#include <utility>
 
 namespace
 {
@@ -52,6 +54,7 @@ struct WasmBootstrapApp
 	armsx2::wasm::ProgramLoader loader;
 	armsx2::wasm::LoadedProgramImage loaded_program;
 	std::string browser_file_summary;
+	std::string mounted_bios_path;
 
 	// -- EE IR recompilation pipeline --
 	armsx2::wasm::MipsLifter lifter;
@@ -61,6 +64,10 @@ struct WasmBootstrapApp
 	armsx2::wasm::EEIRBlock ee_lifted_block;
 	std::string ee_ir_summary;
 	bool ee_ir_lifted = false;
+	bool ee_running = false;
+	std::uint64_t ee_blocks_executed = 0;
+	std::uint64_t ee_ir_nodes_executed = 0;
+	std::unordered_map<std::uint32_t, armsx2::wasm::EEIRBlock> ee_block_cache;
 
 	armsx2::wasm::IopLifter iop_lifter;
 	armsx2::wasm::IopIRInterpreter iop_interpreter;
@@ -68,6 +75,10 @@ struct WasmBootstrapApp
 	armsx2::wasm::IOPIRBlock iop_lifted_block;
 	std::string iop_ir_summary;
 	bool iop_ir_lifted = false;
+	bool iop_running = false;
+	std::uint64_t iop_blocks_executed = 0;
+	std::uint64_t iop_ir_nodes_executed = 0;
+	std::unordered_map<std::uint32_t, armsx2::wasm::IOPIRBlock> iop_block_cache;
 };
 
 WasmBootstrapApp g_app;
@@ -231,7 +242,151 @@ int MountBrowserFile(const char* mounted_path, BrowserFileKind kind)
 	}
 
 	g_app.browser_file_summary = BuildBrowserMountSummary(mounted_path, kind, valid, result, details, size_bytes);
+	if (kind == BrowserFileKind::Bios && valid)
+	{
+		std::string bios_error;
+		if (!armsx2::wasm::LoadBootstrapBiosImage(mounted_path, &bios_error))
+		{
+			g_app.browser_file_summary = BuildBrowserMountSummary(
+				mounted_path, kind, false, "failed", std::string("Error: ") + bios_error + '\n', size_bytes);
+			return 0;
+		}
+
+		g_app.mounted_bios_path = mounted_path;
+	}
+
 	return valid ? 1 : 0;
+}
+
+void ResetExecutionState()
+{
+	g_app.ee_block_cache.clear();
+	g_app.iop_block_cache.clear();
+	g_app.ee_blocks_executed = 0;
+	g_app.iop_blocks_executed = 0;
+	g_app.ee_ir_nodes_executed = 0;
+	g_app.iop_ir_nodes_executed = 0;
+	g_app.ee_ir_lifted = false;
+	g_app.iop_ir_lifted = false;
+	g_app.ee_ir_summary.clear();
+	g_app.iop_ir_summary.clear();
+}
+
+bool PrepareExecution(const char* summary_reason)
+{
+	if (!armsx2::wasm::ResetBootstrapPs2Memory(&g_app.loaded_program.error))
+	{
+		g_app.ee_running = false;
+		g_app.iop_running = false;
+		g_app.ee_ir_summary = std::string("EE execution not started: ") + summary_reason + '\n';
+		g_app.iop_ir_summary = std::string("IOP execution not started: ") + summary_reason + '\n';
+		return false;
+	}
+
+	g_app.ee_state.Reset();
+	g_app.iop_state.Reset();
+	g_app.ee_hw = {};
+	ResetExecutionState();
+	return true;
+}
+
+void UpdateExecutionSummaries(const char* mode)
+{
+	std::ostringstream ee_out;
+	ee_out << "--- EE IR Runtime ---\n";
+	ee_out << "Mode: " << mode << "\n";
+	ee_out << "Current PC: 0x" << std::hex << g_app.ee_state.pc << std::dec << "\n";
+	ee_out << "Blocks executed: " << g_app.ee_blocks_executed << "\n";
+	ee_out << "IR nodes executed: " << g_app.ee_ir_nodes_executed << "\n";
+	ee_out << "Block cache entries: " << g_app.ee_block_cache.size() << "\n";
+	ee_out << "Running: " << (g_app.ee_running ? "yes" : "no") << "\n";
+	g_app.ee_ir_summary = ee_out.str();
+
+	std::ostringstream iop_out;
+	iop_out << "--- IOP IR Runtime ---\n";
+	iop_out << "Mode: " << mode << "\n";
+	iop_out << "Current PC: 0x" << std::hex << g_app.iop_state.pc << std::dec << "\n";
+	iop_out << "Blocks executed: " << g_app.iop_blocks_executed << "\n";
+	iop_out << "IR nodes executed: " << g_app.iop_ir_nodes_executed << "\n";
+	iop_out << "Block cache entries: " << g_app.iop_block_cache.size() << "\n";
+	iop_out << "Running: " << (g_app.iop_running ? "yes" : "no") << "\n";
+	g_app.iop_ir_summary = iop_out.str();
+}
+
+void StepEEExecution(std::uint32_t block_budget)
+{
+	extern EEVM_MemoryAllocMess* eeMem;
+	if (!g_app.ee_running || !eeMem)
+		return;
+
+	for (std::uint32_t step = 0; step < block_budget && g_app.ee_running; ++step)
+	{
+		auto cache_it = g_app.ee_block_cache.find(g_app.ee_state.pc);
+		if (cache_it == g_app.ee_block_cache.end())
+		{
+			armsx2::wasm::EEIRBlock lifted = g_app.lifter.LiftBlock(
+				reinterpret_cast<const std::uint8_t*>(eeMem),
+				sizeof(EEVM_MemoryAllocMess),
+				g_app.ee_state.pc);
+			cache_it = g_app.ee_block_cache.emplace(g_app.ee_state.pc, std::move(lifted)).first;
+		}
+
+		g_app.ee_ir_lifted = true;
+		auto run_result = g_app.ee_interpreter.Execute(
+			cache_it->second, g_app.ee_state,
+			reinterpret_cast<std::uint8_t*>(eeMem),
+			sizeof(EEVM_MemoryAllocMess),
+			&g_app.ee_hw);
+		g_app.ee_state.pc = run_result.next_pc;
+		g_app.ee_blocks_executed++;
+		g_app.ee_ir_nodes_executed += run_result.instructions_run;
+
+		if (run_result.interrupt_pending)
+			g_app.ee_state.pc = 0x80000200u;
+
+		if (run_result.halted || !run_result.error.empty())
+		{
+			g_app.ee_running = false;
+			if (!run_result.error.empty())
+				g_app.ee_ir_summary += std::string("Error: ") + run_result.error + "\n";
+		}
+	}
+}
+
+void StepIOPExecution(std::uint32_t block_budget)
+{
+	extern IopVM_MemoryAllocMess* iopMem;
+	if (!g_app.iop_running || !iopMem)
+		return;
+
+	for (std::uint32_t step = 0; step < block_budget && g_app.iop_running; ++step)
+	{
+		auto cache_it = g_app.iop_block_cache.find(g_app.iop_state.pc);
+		if (cache_it == g_app.iop_block_cache.end())
+		{
+			armsx2::wasm::IOPIRBlock lifted = g_app.iop_lifter.LiftBlock(
+				reinterpret_cast<const std::uint8_t*>(iopMem),
+				sizeof(IopVM_MemoryAllocMess),
+				g_app.iop_state.pc);
+			cache_it = g_app.iop_block_cache.emplace(g_app.iop_state.pc, std::move(lifted)).first;
+		}
+
+		g_app.iop_ir_lifted = true;
+		auto run_result = g_app.iop_interpreter.Execute(
+			cache_it->second, g_app.iop_state,
+			reinterpret_cast<std::uint8_t*>(iopMem),
+			sizeof(IopVM_MemoryAllocMess));
+		g_app.iop_state.pc = run_result.next_pc;
+		g_app.iop_blocks_executed++;
+		g_app.iop_ir_nodes_executed += run_result.instructions_run;
+
+		if (run_result.halted || !run_result.error.empty())
+		{
+			g_app.iop_running = false;
+			if (!run_result.error.empty())
+				g_app.iop_ir_summary += std::string("Error: ") + run_result.error + "\n";
+		}
+	}
 }
 
 bool InitializeApp()
@@ -310,6 +465,11 @@ void TickApp()
 		g_app.interpreter.Execute(g_app.program, g_app.state);
 	}
 
+	StepEEExecution(64);
+	StepIOPExecution(64);
+	if (g_app.ee_running || g_app.iop_running)
+		UpdateExecutionSummaries("continuous");
+
 	int width = 0;
 	int height = 0;
 	SDL_GetWindowSizeInPixels(g_app.window, &width, &height);
@@ -343,83 +503,20 @@ int armsx2_wasm_load_program(const std::uint8_t* data, size_t size)
 
 	g_app.loaded_program = g_app.loader.LoadFromBytes(std::span<const u8>(reinterpret_cast<const u8*>(data), size));
 
-	// If the ELF loaded successfully, lift the entry block to IR.
 	if (g_app.loaded_program.valid && g_app.loaded_program.format == armsx2::wasm::ProgramFormat::PS2Elf)
 	{
-		// Use the flat EE memory backing for lifting.
-		extern EEVM_MemoryAllocMess* eeMem;
-		if (eeMem)
-		{
-			g_app.ee_state.Reset();
-			g_app.ee_state.pc = g_app.loaded_program.entry_point;
-
-			// Lift the entry basic block.
-			g_app.ee_lifted_block = g_app.lifter.LiftBlock(
-				reinterpret_cast<const std::uint8_t*>(eeMem),
-				sizeof(EEVM_MemoryAllocMess),
-				g_app.loaded_program.entry_point);
-
-			g_app.ee_ir_lifted = true;
-
-			// Run the lifted block through the IR interpreter with HW register support.
-			g_app.ee_hw.RaiseVBlankStart(); // seed an initial VBlank so BIOS/games don't hang
-			auto run_result = g_app.ee_interpreter.Execute(
-				g_app.ee_lifted_block, g_app.ee_state,
-				reinterpret_cast<std::uint8_t*>(eeMem),
-				sizeof(EEVM_MemoryAllocMess),
-				&g_app.ee_hw);
-
-			// Build a summary of the IR lift + run.
-			std::ostringstream ir_out;
-			ir_out << "--- EE IR Pipeline ---\n";
-			ir_out << "Entry PC: 0x" << std::hex << g_app.loaded_program.entry_point << "\n";
-			ir_out << "Block range: 0x" << std::hex << g_app.ee_lifted_block.start_pc
-				   << " .. 0x" << std::hex << g_app.ee_lifted_block.end_pc << std::dec << "\n";
-			ir_out << "IR nodes emitted: " << g_app.ee_lifted_block.instructions.size() << "\n";
-			ir_out << "IR nodes executed: " << run_result.instructions_run << "\n";
-			ir_out << "Next PC: 0x" << std::hex << run_result.next_pc << "\n" << std::dec;
-			if (run_result.halted)
-				ir_out << "Halted: yes\n";
-			if (run_result.interrupt_pending)
-				ir_out << "Interrupt pending: yes (INTC_STAT=0x" << std::hex << g_app.ee_hw.intc_stat
-				       << " INTC_MASK=0x" << g_app.ee_hw.intc_mask << ")\n" << std::dec;
-			if (!run_result.error.empty())
-				ir_out << "Error: " << run_result.error << "\n";
-			ir_out << "\n" << g_app.ee_lifted_block.Dump();
-			g_app.ee_ir_summary = ir_out.str();
-
-			std::fprintf(stdout, "%s\n", g_app.ee_ir_summary.c_str());
-		}
-
-		extern IopVM_MemoryAllocMess* iopMem;
-		if (iopMem)
-		{
-			g_app.iop_state.Reset();
-			g_app.iop_lifted_block = g_app.iop_lifter.LiftBlock(
-				reinterpret_cast<const std::uint8_t*>(iopMem),
-				sizeof(IopVM_MemoryAllocMess),
-				g_app.iop_state.pc);
-			g_app.iop_ir_lifted = true;
-			auto iop_result = g_app.iop_interpreter.Execute(
-				g_app.iop_lifted_block, g_app.iop_state,
-				reinterpret_cast<std::uint8_t*>(iopMem),
-				sizeof(IopVM_MemoryAllocMess));
-			std::ostringstream iop_out;
-			iop_out << "--- IOP IR Pipeline ---\n";
-			iop_out << "Reset vector: 0x" << std::hex << g_app.iop_state.pc << " (BFC00000)\n";
-			iop_out << "Block range: 0x" << std::hex << g_app.iop_lifted_block.start_pc
-			        << " .. 0x" << std::hex << g_app.iop_lifted_block.end_pc << std::dec << "\n";
-			iop_out << "IR nodes emitted: " << g_app.iop_lifted_block.instructions.size() << "\n";
-			iop_out << "IR nodes executed: " << iop_result.instructions_run << "\n";
-			iop_out << "Next PC: 0x" << std::hex << iop_result.next_pc << "\n" << std::dec;
-			if (iop_result.halted)
-				iop_out << "Halted: yes\n";
-			if (!iop_result.error.empty())
-				iop_out << "Error: " << iop_result.error << "\n";
-			iop_out << "\n" << g_app.iop_lifted_block.Dump();
-			g_app.iop_ir_summary = iop_out.str();
-			std::fprintf(stdout, "%s\n", g_app.iop_ir_summary.c_str());
-		}
+		g_app.ee_state.Reset();
+		g_app.ee_state.pc = g_app.loaded_program.entry_point;
+		g_app.iop_state.Reset();
+		ResetExecutionState();
+		g_app.ee_running = true;
+		g_app.iop_running = true;
+		UpdateExecutionSummaries("elf");
+	}
+	else
+	{
+		g_app.ee_running = false;
+		g_app.iop_running = false;
 	}
 
 	return g_app.loaded_program.valid ? 1 : 0;
@@ -463,6 +560,37 @@ EMSCRIPTEN_KEEPALIVE
 int armsx2_wasm_mount_game(const char* mounted_path)
 {
 	return MountBrowserFile(mounted_path, BrowserFileKind::Game);
+}
+
+#if defined(__EMSCRIPTEN__)
+EMSCRIPTEN_KEEPALIVE
+#endif
+int armsx2_wasm_boot_bios()
+{
+	if (g_app.mounted_bios_path.empty())
+	{
+		g_app.ee_ir_summary = "EE execution not started: mount a BIOS image first.\n";
+		g_app.iop_ir_summary = "IOP execution not started: mount a BIOS image first.\n";
+		return 0;
+	}
+
+	std::string bios_error;
+	if (!armsx2::wasm::LoadBootstrapBiosImage(g_app.mounted_bios_path.c_str(), &bios_error))
+	{
+		g_app.ee_ir_summary = std::string("EE execution not started: ") + bios_error + '\n';
+		g_app.iop_ir_summary = std::string("IOP execution not started: ") + bios_error + '\n';
+		return 0;
+	}
+
+	if (!PrepareExecution("bootstrap memory allocation failed"))
+		return 0;
+
+	g_app.ee_state.pc = 0x1FC00000u;
+	g_app.iop_state.pc = 0xBFC00000u;
+	g_app.ee_running = true;
+	g_app.iop_running = true;
+	UpdateExecutionSummaries("bios");
+	return 1;
 }
 
 #if defined(__EMSCRIPTEN__)

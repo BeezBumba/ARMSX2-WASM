@@ -1,4 +1,5 @@
 #include "mips_to_ir.h"
+#include "wasm_memory.h"
 
 #include <cstdio>
 #include <cstring>
@@ -328,11 +329,15 @@ void Emit(EEIRBlock& block, EEIROp op, std::uint8_t dst = EEIRReg::INVALID,
 }
 
 // Read a 32-bit little-endian word from memory at a physical address.
-std::uint32_t ReadWord(const std::uint8_t* memory, std::uint32_t memory_size, std::uint32_t phys_addr)
+std::uint32_t ReadWord(const std::uint8_t* memory, std::uint32_t memory_size, std::uint32_t vaddr)
 {
+	std::uint32_t w;
+	if (ReadBootstrapEEMemory(vaddr, reinterpret_cast<u8*>(&w), sizeof(w)))
+		return w;
+
+	const std::uint32_t phys_addr = vaddr & 0x1FFFFFFF;
 	if (phys_addr + 4 > memory_size)
 		return 0;
-	std::uint32_t w;
 	std::memcpy(&w, memory + phys_addr, sizeof(w));
 	return w;
 }
@@ -357,9 +362,7 @@ EEIRBlock MipsLifter::LiftBlock(const std::uint8_t* memory, std::uint32_t memory
 
 	while (!block_done && decoded < max_instructions)
 	{
-		// Convert virtual address to physical (simple mask for kseg0/kseg1).
-		std::uint32_t phys = pc & 0x1FFFFFFF;
-		std::uint32_t op = ReadWord(memory, memory_size, phys);
+		std::uint32_t op = ReadWord(memory, memory_size, pc);
 
 		bool is_branch = DecodeInstruction(op, pc, block);
 

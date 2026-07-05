@@ -240,6 +240,7 @@ Module.onRuntimeInitialized = async function () {
   const button = document.getElementById('load-program');
   const biosInput = document.getElementById('bios-file');
   const biosButton = document.getElementById('mount-bios');
+  const bootBiosButton = document.getElementById('boot-bios');
   const gameInput = document.getElementById('game-file');
   const gameButton = document.getElementById('mount-game');
 
@@ -276,10 +277,21 @@ Module.onRuntimeInitialized = async function () {
           loadingLabel: 'Mounting BIOS',
           successLabel: 'Mounted BIOS',
         });
+        armsx2SetButtonEnabled('boot-bios', true);
       } catch (error) {
         console.error('Failed to mount BIOS image', error);
         Module.setStatus('BIOS mount failed.');
       }
+    });
+  }
+
+  if (bootBiosButton) {
+    bootBiosButton.addEventListener('click', function () {
+      const success = Module._armsx2_wasm_boot_bios();
+      const eeSummary = Module.UTF8ToString(Module._armsx2_wasm_get_ir_summary());
+      const iopSummary = Module.UTF8ToString(Module._armsx2_wasm_get_iop_ir_summary());
+      armsx2RenderTextBlock('bios-info', `${eeSummary}\n${iopSummary}`.trim());
+      Module.setStatus(success ? 'Booting BIOS through the continuous EE/IOP loop.' : 'BIOS boot failed.');
     });
   }
 
@@ -309,6 +321,7 @@ Module.onRuntimeInitialized = async function () {
 
   armsx2SetLoadButtonEnabled(false);
   armsx2SetButtonEnabled('mount-bios', false);
+  armsx2SetButtonEnabled('boot-bios', false);
   armsx2SetButtonEnabled('mount-game', false);
   try {
     const restored = await armsx2RestorePersistedProgram();
