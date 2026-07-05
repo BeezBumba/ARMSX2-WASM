@@ -240,7 +240,7 @@ int MountBrowserFile(const char* mounted_path, BrowserFileKind kind)
 	}
 	else
 	{
-		details = "Detected format: browser-backed BIOS candidate\nProbe: mounted for future BIOS file access without copying the ROM into the WASM heap\n";
+		details = "Detected format: browser-backed BIOS candidate\nProbe: mounted and copied into the EE BIOS ROM-mapped region (0x1FC00000)\n";
 	}
 
 	g_app.browser_file_summary = BuildBrowserMountSummary(mounted_path, kind, valid, result, details, size_bytes);

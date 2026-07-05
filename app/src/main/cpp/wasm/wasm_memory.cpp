@@ -1,6 +1,7 @@
 #include "wasm_memory.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <fstream>
 #include <memory>
@@ -21,6 +22,35 @@ std::unique_ptr<EEVM_MemoryAllocMess> s_ee_memory;
 std::unique_ptr<IopVM_MemoryAllocMess> s_iop_memory;
 std::vector<u8> s_bios_image;
 constexpr u32 s_bios_base_address = 0x1FC00000u;
+constexpr u32 s_bios_window_size = 0x00400000u;
+
+struct EETlbEntry
+{
+	u32 virtual_base;
+	u32 size;
+	u32 physical_base;
+};
+
+constexpr std::array<EETlbEntry, 3> s_bootstrap_ee_tlb = {{
+	{0x1FC00000u, s_bios_window_size, s_bios_base_address},
+	{0x9FC00000u, s_bios_window_size, s_bios_base_address},
+	{0xBFC00000u, s_bios_window_size, s_bios_base_address},
+}};
+
+u32 TranslateEEAddress(u32 virtual_address)
+{
+	for (const EETlbEntry& entry : s_bootstrap_ee_tlb)
+	{
+		if (virtual_address >= entry.virtual_base)
+		{
+			const u32 offset = virtual_address - entry.virtual_base;
+			if (offset < entry.size)
+				return entry.physical_base + offset;
+		}
+	}
+
+	return virtual_address & 0x1FFFFFFF;
+}
 
 std::string FormatHex(u32 value)
 {
@@ -59,7 +89,7 @@ bool VisitEEMemoryConst(u32 address, u32 size, Callback callback)
 	while (remaining > 0)
 	{
 		u32 chunk = 0;
-		const u32 physical_address = static_cast<u32>(current_address) & 0x1FFFFFFF;
+		const u32 physical_address = TranslateEEAddress(static_cast<u32>(current_address));
 		if (current_address >= 0x70000000ull && current_address < 0x70004000ull)
 		{
 			const size_t offset = static_cast<size_t>(current_address - 0x70000000ull);
@@ -116,23 +146,23 @@ bool VisitEEMemory(u32 address, u32 size, Callback callback, std::string* error)
 		}
 		else
 		{
-			const u32 physical_address = static_cast<u32>(current_address) & 0x1FFFFFFF;
-			if (physical_address < Ps2MemSize::MainRam)
+			const u32 translated_address = TranslateEEAddress(static_cast<u32>(current_address));
+			if (translated_address < Ps2MemSize::MainRam)
 			{
-				chunk = std::min<u32>(remaining, Ps2MemSize::MainRam - physical_address);
-				callback(eeMem->Main + physical_address, chunk);
+				chunk = std::min<u32>(remaining, Ps2MemSize::MainRam - translated_address);
+				callback(eeMem->Main + translated_address, chunk);
 			}
-			else if (physical_address < Ps2MemSize::TotalRam)
+			else if (translated_address < Ps2MemSize::TotalRam)
 			{
-				const u32 offset = physical_address - Ps2MemSize::MainRam;
-				chunk = std::min<u32>(remaining, Ps2MemSize::TotalRam - physical_address);
+				const u32 offset = translated_address - Ps2MemSize::MainRam;
+				chunk = std::min<u32>(remaining, Ps2MemSize::TotalRam - translated_address);
 				callback(eeMem->ExtraMemory + offset, chunk);
 			}
 			else if (!s_bios_image.empty() &&
-					 physical_address >= s_bios_base_address &&
-					 physical_address < (s_bios_base_address + static_cast<u32>(s_bios_image.size())))
+					 translated_address >= s_bios_base_address &&
+					 translated_address < (s_bios_base_address + static_cast<u32>(s_bios_image.size())))
 			{
-				const u32 bios_offset = physical_address - s_bios_base_address;
+				const u32 bios_offset = translated_address - s_bios_base_address;
 				chunk = std::min<u32>(remaining, static_cast<u32>(s_bios_image.size()) - bios_offset);
 				callback(s_bios_image.data() + bios_offset, chunk);
 			}
@@ -281,8 +311,24 @@ bool LoadBootstrapBiosImage(const char* mounted_path, std::string* error)
 		return false;
 	}
 
-	s_bios_image = std::move(image);
+	s_bios_image.assign(image.size(), 0);
+	std::string write_error;
+	if (!WriteBootstrapEEMemory(s_bios_base_address,
+			std::span<const u8>(image.data(), image.size()),
+			&write_error))
+	{
+		s_bios_image.clear();
+		if (error)
+			*error = write_error.empty() ? "Failed to map BIOS image into EE bootstrap memory." : write_error;
+		return false;
+	}
+
 	return true;
+}
+
+u32 TranslateBootstrapEEPhysicalAddress(u32 virtual_address)
+{
+	return TranslateEEAddress(virtual_address);
 }
 
 bool ReadBootstrapEEMemory(u32 address, u8* destination, u32 size)

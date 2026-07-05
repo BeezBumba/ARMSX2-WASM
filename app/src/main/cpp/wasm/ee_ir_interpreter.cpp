@@ -11,13 +11,13 @@
 namespace armsx2::wasm
 {
 // ============================================================================
-// Memory helpers — simple flat physical address model.
+// Memory helpers — bootstrap EE address model with static BIOS TLB mapping.
 // ============================================================================
 namespace
 {
 std::uint32_t ToPhys(std::uint32_t vaddr)
 {
-	return vaddr & 0x1FFFFFFF;
+	return TranslateBootstrapEEPhysicalAddress(vaddr);
 }
 
 // Hardware register range: 0x10000000–0x1000FFFF (EE I/O registers)

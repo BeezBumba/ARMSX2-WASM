@@ -342,7 +342,7 @@ std::uint32_t ReadWord(const std::uint8_t* memory, std::uint32_t memory_size, st
 	if (ReadBootstrapEEMemory(vaddr, reinterpret_cast<u8*>(&w), sizeof(w)))
 		return w;
 
-	const std::uint32_t phys_addr = vaddr & 0x1FFFFFFF;
+	const std::uint32_t phys_addr = TranslateBootstrapEEPhysicalAddress(vaddr);
 	if (phys_addr + 4 > memory_size)
 		return 0;
 	std::memcpy(&w, memory + phys_addr, sizeof(w));
