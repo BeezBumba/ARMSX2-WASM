@@ -14,6 +14,7 @@ add_executable(armsx2-wasm-bootstrap
 	ee_hw_regs.cpp
 	iop_to_ir.cpp
 	iop_ir_interpreter.cpp
+	iop_hw_regs.cpp
 )
 
 target_include_directories(armsx2-wasm-bootstrap PRIVATE

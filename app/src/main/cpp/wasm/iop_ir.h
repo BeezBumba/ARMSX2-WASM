@@ -58,6 +58,7 @@ enum class IOPIROp : std::uint8_t
 
     Mfc0, Mtc0,
     Tlbr, Tlbwi, Tlbwr, Tlbp,
+    Rfe,
 
     COP2,
     LWC2,

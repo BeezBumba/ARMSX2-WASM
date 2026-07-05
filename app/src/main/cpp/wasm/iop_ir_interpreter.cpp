@@ -11,6 +11,16 @@ std::uint32_t ToPhys(std::uint32_t vaddr)
 {
     return vaddr & 0x1FFFFFFF;
 }
+
+// IOP hardware register range: 0x1F800000–0x1F803FFF
+// (interrupt controller, DMA, timers, and other I/O ports)
+constexpr std::uint32_t IOP_HW_BASE = 0x1F800000u;
+constexpr std::uint32_t IOP_HW_END  = 0x1F804000u;
+
+inline bool IsIOPHWReg(std::uint32_t pa)
+{
+    return pa >= IOP_HW_BASE && pa < IOP_HW_END;
+}
 } // namespace
 
 std::uint8_t IopIRInterpreter::ReadMem8(const std::uint8_t* mem, std::uint32_t sz, std::uint32_t addr)
@@ -56,10 +66,27 @@ void IopIRInterpreter::WriteMem32(std::uint8_t* mem, std::uint32_t sz, std::uint
 }
 
 IopIRInterpreter::RunResult IopIRInterpreter::Execute(const IOPIRBlock& block, IOPState& state,
-                                                      std::uint8_t* iop_memory, std::uint32_t iop_memory_size) const
+                                                      std::uint8_t* iop_memory, std::uint32_t iop_memory_size,
+                                                      IOPHWRegs* hw) const
 {
     RunResult result;
     result.next_pc = block.end_pc;
+
+    // -------------------------------------------------------------------------
+    // Hardware-aware memory access lambdas.
+    // Reads/writes to the IOP I/O region (0x1F800000–0x1F803FFF) are routed to
+    // the IOPHWRegs state (I_STAT, I_MASK, etc.) instead of flat RAM.
+    // -------------------------------------------------------------------------
+    auto read32 = [&](std::uint32_t addr) -> std::uint32_t {
+        const std::uint32_t pa = ToPhys(addr);
+        if (hw && IsIOPHWReg(pa)) return hw->Read32(pa);
+        return ReadMem32(iop_memory, iop_memory_size, addr);
+    };
+    auto write32 = [&](std::uint32_t addr, std::uint32_t val) {
+        const std::uint32_t pa = ToPhys(addr);
+        if (hw && IsIOPHWReg(pa)) { hw->Write32(pa, val); return; }
+        WriteMem32(iop_memory, iop_memory_size, addr, val);
+    };
 
     bool branch_taken = false;
     std::uint32_t branch_target = 0;
@@ -269,11 +296,11 @@ IopIRInterpreter::RunResult IopIRInterpreter::Execute(const IOPIRBlock& block, I
                 state.WriteGPR(n.dst, ReadMem16(iop_memory, iop_memory_size, state.ReadGPR(n.src0) + static_cast<std::int16_t>(n.imm)));
                 break;
             case IOPIROp::LW:
-                state.WriteGPR(n.dst, ReadMem32(iop_memory, iop_memory_size, state.ReadGPR(n.src0) + static_cast<std::int16_t>(n.imm)));
+                state.WriteGPR(n.dst, read32(state.ReadGPR(n.src0) + static_cast<std::int16_t>(n.imm)));
                 break;
             case IOPIROp::LWL:
             case IOPIROp::LWR:
-                state.WriteGPR(n.dst, ReadMem32(iop_memory, iop_memory_size, (state.ReadGPR(n.src0) + static_cast<std::int16_t>(n.imm)) & ~3u));
+                state.WriteGPR(n.dst, read32((state.ReadGPR(n.src0) + static_cast<std::int16_t>(n.imm)) & ~3u));
                 break;
 
             case IOPIROp::SB:
@@ -283,11 +310,11 @@ IopIRInterpreter::RunResult IopIRInterpreter::Execute(const IOPIRBlock& block, I
                 WriteMem16(iop_memory, iop_memory_size, state.ReadGPR(n.dst) + static_cast<std::int16_t>(n.imm), static_cast<std::uint16_t>(state.ReadGPR(n.src0)));
                 break;
             case IOPIROp::SW:
-                WriteMem32(iop_memory, iop_memory_size, state.ReadGPR(n.dst) + static_cast<std::int16_t>(n.imm), state.ReadGPR(n.src0));
+                write32(state.ReadGPR(n.dst) + static_cast<std::int16_t>(n.imm), state.ReadGPR(n.src0));
                 break;
             case IOPIROp::SWL:
             case IOPIROp::SWR:
-                WriteMem32(iop_memory, iop_memory_size, (state.ReadGPR(n.dst) + static_cast<std::int16_t>(n.imm)) & ~3u, state.ReadGPR(n.src0));
+                write32((state.ReadGPR(n.dst) + static_cast<std::int16_t>(n.imm)) & ~3u, state.ReadGPR(n.src0));
                 break;
 
             case IOPIROp::Beq:
@@ -381,6 +408,13 @@ IopIRInterpreter::RunResult IopIRInterpreter::Execute(const IOPIRBlock& block, I
                 state.cop0[n.dst - IOPIRReg::COP0(0)] = state.ReadGPR(n.src0);
                 break;
 
+            case IOPIROp::Rfe:
+                // R3000A RFE: restore the mode/interrupt stack in COP0 Status (reg 12).
+                // Shifts [IEp, KUp] → [IEc, KUc] and [IEo, KUo] → [IEp, KUp].
+                // This does NOT change PC; the preceding JR $k0 provides the return address.
+                state.cop0[12] = (state.cop0[12] & ~0x0Fu) | ((state.cop0[12] >> 2) & 0x0Fu);
+                break;
+
             default:
                 break;
         }
@@ -388,6 +422,18 @@ IopIRInterpreter::RunResult IopIRInterpreter::Execute(const IOPIRBlock& block, I
 
     if (branch_taken)
         result.next_pc = branch_target;
+
+    // Check for pending IOP interrupts at the block boundary.
+    // An interrupt is pending when (I_STAT & I_MASK) != 0 and the IOP COP0
+    // Status IE bit (bit 0) is set.  We surface the flag to the caller to
+    // decide whether to vector to the exception handler (0x80000080).
+    if (hw && hw->AnyPending())
+    {
+        const bool ie = (state.cop0[12] & 1u) != 0;      // Status.IE
+        const bool exl = (state.cop0[12] & 2u) != 0;     // Status.EXL (R3000A: KUc)
+        if (ie && !exl)
+            result.interrupt_pending = true;
+    }
 
     return result;
 }

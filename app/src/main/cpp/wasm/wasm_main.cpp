@@ -6,6 +6,7 @@
 #include "ee_hw_regs.h"
 #include "ee_state.h"
 #include "iop_state.h"
+#include "iop_hw_regs.h"
 #include "iop_ir.h"
 #include "iop_to_ir.h"
 #include "iop_ir_interpreter.h"
@@ -72,6 +73,7 @@ struct WasmBootstrapApp
 	armsx2::wasm::IopLifter iop_lifter;
 	armsx2::wasm::IopIRInterpreter iop_interpreter;
 	armsx2::wasm::IOPState iop_state;
+	armsx2::wasm::IOPHWRegs iop_hw;           // interrupt controller (I_STAT/I_MASK)
 	armsx2::wasm::IOPIRBlock iop_lifted_block;
 	std::string iop_ir_summary;
 	bool iop_ir_lifted = false;
@@ -286,6 +288,7 @@ bool PrepareExecution(const char* summary_reason)
 	g_app.ee_state.Reset();
 	g_app.iop_state.Reset();
 	g_app.ee_hw = {};
+	g_app.iop_hw = {};
 	ResetExecutionState();
 	return true;
 }
@@ -375,10 +378,14 @@ void StepIOPExecution(std::uint32_t block_budget)
 		auto run_result = g_app.iop_interpreter.Execute(
 			cache_it->second, g_app.iop_state,
 			reinterpret_cast<std::uint8_t*>(iopMem),
-			sizeof(IopVM_MemoryAllocMess));
+			sizeof(IopVM_MemoryAllocMess),
+			&g_app.iop_hw);
 		g_app.iop_state.pc = run_result.next_pc;
 		g_app.iop_blocks_executed++;
 		g_app.iop_ir_nodes_executed += run_result.instructions_run;
+
+		if (run_result.interrupt_pending)
+			g_app.iop_state.pc = 0x80000080u;
 
 		if (run_result.halted || !run_result.error.empty())
 		{

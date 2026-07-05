@@ -85,6 +85,7 @@ const char* IOPIROpName(IOPIROp op)
         case IOPIROp::Tlbwi: return "Tlbwi";
         case IOPIROp::Tlbwr: return "Tlbwr";
         case IOPIROp::Tlbp: return "Tlbp";
+        case IOPIROp::Rfe: return "Rfe";
         case IOPIROp::COP2: return "COP2";
         case IOPIROp::LWC2: return "LWC2";
         case IOPIROp::SWC2: return "SWC2";
@@ -231,6 +232,7 @@ bool IopLifter::DecodeSpecial(std::uint32_t op, std::uint32_t pc, IOPIRBlock& bl
         case 0x0B: Emit(block, IOPIROp::MovN, IOPIRReg::GPR(Rd(op)), IOPIRReg::GPR(Rs(op)), IOPIRReg::GPR(Rt(op))); return false;
         case 0x0C: Emit(block, IOPIROp::Syscall, IOPIRReg::INVALID, IOPIRReg::INVALID, IOPIRReg::INVALID, static_cast<std::int32_t>((op >> 6) & 0xFFFFF)); return true;
         case 0x0D: Emit(block, IOPIROp::Break, IOPIRReg::INVALID, IOPIRReg::INVALID, IOPIRReg::INVALID, static_cast<std::int32_t>((op >> 6) & 0xFFFFF)); return true;
+        case 0x0F: Emit(block, IOPIROp::Sync); return false;
         case 0x10: Emit(block, IOPIROp::Mfhi, IOPIRReg::GPR(Rd(op))); return false;
         case 0x11: Emit(block, IOPIROp::Mthi, IOPIRReg::INVALID, IOPIRReg::GPR(Rs(op))); return false;
         case 0x12: Emit(block, IOPIROp::Mflo, IOPIRReg::GPR(Rd(op))); return false;
@@ -282,6 +284,7 @@ bool IopLifter::DecodeCOP0(std::uint32_t op, std::uint32_t pc, IOPIRBlock& block
                 case 0x02: Emit(block, IOPIROp::Tlbwi); return false;
                 case 0x06: Emit(block, IOPIROp::Tlbwr); return false;
                 case 0x08: Emit(block, IOPIROp::Tlbp); return false;
+                case 0x10: Emit(block, IOPIROp::Rfe); return false;
                 case 0x18: Emit(block, IOPIROp::Eret); return true;
                 default: Emit(block, IOPIROp::Nop); return false;
             }
