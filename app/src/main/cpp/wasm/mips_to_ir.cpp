@@ -191,6 +191,105 @@ const char* EEIROpName(EEIROp op)
 		case EEIROp::COP2:      return "COP2";
 		case EEIROp::LQC2:      return "LQC2";
 		case EEIROp::SQC2:      return "SQC2";
+		case EEIROp::Mfhi1:     return "Mfhi1";
+		case EEIROp::Mthi1:     return "Mthi1";
+		case EEIROp::Mflo1:     return "Mflo1";
+		case EEIROp::Mtlo1:     return "Mtlo1";
+		case EEIROp::Mult1:     return "Mult1";
+		case EEIROp::MultU1:    return "MultU1";
+		case EEIROp::Div1:      return "Div1";
+		case EEIROp::DivU1:     return "DivU1";
+		case EEIROp::Madd:      return "Madd";
+		case EEIROp::MaddU:     return "MaddU";
+		case EEIROp::Madd1:     return "Madd1";
+		case EEIROp::MaddU1:    return "MaddU1";
+		case EEIROp::Plzcw:     return "Plzcw";
+		case EEIROp::Pmfhl:     return "Pmfhl";
+		case EEIROp::Pmthl:     return "Pmthl";
+		case EEIROp::Psllh:     return "Psllh";
+		case EEIROp::Psrlh:     return "Psrlh";
+		case EEIROp::Psrah:     return "Psrah";
+		case EEIROp::Psllw:     return "Psllw";
+		case EEIROp::Psrlw:     return "Psrlw";
+		case EEIROp::Psraw:     return "Psraw";
+		case EEIROp::Psllvw:    return "Psllvw";
+		case EEIROp::Psrlvw:    return "Psrlvw";
+		case EEIROp::Psravw:    return "Psravw";
+		case EEIROp::Paddw:     return "Paddw";
+		case EEIROp::Psubw:     return "Psubw";
+		case EEIROp::Paddh:     return "Paddh";
+		case EEIROp::Psubh:     return "Psubh";
+		case EEIROp::Paddb:     return "Paddb";
+		case EEIROp::Psubb:     return "Psubb";
+		case EEIROp::Paddsw:    return "Paddsw";
+		case EEIROp::Psubsw:    return "Psubsw";
+		case EEIROp::Paddsh:    return "Paddsh";
+		case EEIROp::Psubsh:    return "Psubsh";
+		case EEIROp::Paddsb:    return "Paddsb";
+		case EEIROp::Psubsb:    return "Psubsb";
+		case EEIROp::Padduw:    return "Padduw";
+		case EEIROp::Psubuw:    return "Psubuw";
+		case EEIROp::Padduh:    return "Padduh";
+		case EEIROp::Psubuh:    return "Psubuh";
+		case EEIROp::Paddub:    return "Paddub";
+		case EEIROp::Psubub:    return "Psubub";
+		case EEIROp::Padsbh:    return "Padsbh";
+		case EEIROp::Pcgtw:     return "Pcgtw";
+		case EEIROp::Pcgth:     return "Pcgth";
+		case EEIROp::Pcgtb:     return "Pcgtb";
+		case EEIROp::Pceqw:     return "Pceqw";
+		case EEIROp::Pceqh:     return "Pceqh";
+		case EEIROp::Pceqb:     return "Pceqb";
+		case EEIROp::Pmaxw:     return "Pmaxw";
+		case EEIROp::Pmaxh:     return "Pmaxh";
+		case EEIROp::Pminw:     return "Pminw";
+		case EEIROp::Pminh:     return "Pminh";
+		case EEIROp::Pabsw:     return "Pabsw";
+		case EEIROp::Pabsh:     return "Pabsh";
+		case EEIROp::Pextlw:    return "Pextlw";
+		case EEIROp::Pextlh:    return "Pextlh";
+		case EEIROp::Pextlb:    return "Pextlb";
+		case EEIROp::Pextuw:    return "Pextuw";
+		case EEIROp::Pextuh:    return "Pextuh";
+		case EEIROp::Pextub:    return "Pextub";
+		case EEIROp::Ppacw:     return "Ppacw";
+		case EEIROp::Ppach:     return "Ppach";
+		case EEIROp::Ppacb:     return "Ppacb";
+		case EEIROp::Pext5:     return "Pext5";
+		case EEIROp::Ppac5:     return "Ppac5";
+		case EEIROp::Pand:      return "Pand";
+		case EEIROp::Por:       return "Por";
+		case EEIROp::Pxor:      return "Pxor";
+		case EEIROp::Pnor:      return "Pnor";
+		case EEIROp::Pcpyld:    return "Pcpyld";
+		case EEIROp::Pcpyud:    return "Pcpyud";
+		case EEIROp::Pcpyh:     return "Pcpyh";
+		case EEIROp::Pinth:     return "Pinth";
+		case EEIROp::Pinteh:    return "Pinteh";
+		case EEIROp::Pexeh:     return "Pexeh";
+		case EEIROp::Prevh:     return "Prevh";
+		case EEIROp::Pexew:     return "Pexew";
+		case EEIROp::Prot3w:    return "Prot3w";
+		case EEIROp::Pexch:     return "Pexch";
+		case EEIROp::Pexcw:     return "Pexcw";
+		case EEIROp::Pmulth:    return "Pmulth";
+		case EEIROp::Pmultw:    return "Pmultw";
+		case EEIROp::Pmultuw:   return "Pmultuw";
+		case EEIROp::Pmaddh:    return "Pmaddh";
+		case EEIROp::Pmaddw:    return "Pmaddw";
+		case EEIROp::Pmadduw:   return "Pmadduw";
+		case EEIROp::Pmsubh:    return "Pmsubh";
+		case EEIROp::Pmsubw:    return "Pmsubw";
+		case EEIROp::Phmadh:    return "Phmadh";
+		case EEIROp::Phmsbh:    return "Phmsbh";
+		case EEIROp::MmiPmfhi:  return "MmiPmfhi";
+		case EEIROp::MmiPmflo:  return "MmiPmflo";
+		case EEIROp::MmiPmthi:  return "MmiPmthi";
+		case EEIROp::MmiPmtlo:  return "MmiPmtlo";
+		case EEIROp::Pdivw:     return "Pdivw";
+		case EEIROp::Pdivuw:    return "Pdivuw";
+		case EEIROp::Pdivbw:    return "Pdivbw";
+		case EEIROp::Qfsrv:     return "Qfsrv";
 
 		default:                return "???";
 	}
@@ -1001,15 +1100,175 @@ bool MipsLifter::DecodeCOP1(std::uint32_t op, std::uint32_t pc, EEIRBlock& block
 
 // ============================================================================
 // MMI (opcode 0x1C) — Multimedia Instructions.
-// Placeholder: emits Nop for now — individual MMI ops will be expanded as
-// the SIMD IR is designed.
 // ============================================================================
 bool MipsLifter::DecodeMMI(std::uint32_t op, std::uint32_t pc, EEIRBlock& block) const
 {
-	// MMI instructions use SPECIAL2 encoding (function field at bits 5:0).
-	// For now, emit a Nop placeholder.  The full 128-bit SIMD IR nodes
-	// (PADDB, PADDW, PAND, etc.) will be added in a later phase.
-	Emit(block, EEIROp::Nop);
-	return false;
+(void)pc;
+const auto gpr = [](std::uint8_t i) { return EEIRReg::GPR(i); };
+const auto emit_rd = [&](EEIROp ir) {
+Emit(block, ir, gpr(Rd(op)));
+};
+const auto emit_rs = [&](EEIROp ir) {
+Emit(block, ir, EEIRReg::INVALID, gpr(Rs(op)));
+};
+const auto emit_rd_rt = [&](EEIROp ir) {
+Emit(block, ir, gpr(Rd(op)), gpr(Rt(op)));
+};
+const auto emit_rd_rs = [&](EEIROp ir) {
+Emit(block, ir, gpr(Rd(op)), gpr(Rs(op)));
+};
+const auto emit_rd_rs_rt = [&](EEIROp ir) {
+Emit(block, ir, gpr(Rd(op)), gpr(Rs(op)), gpr(Rt(op)));
+};
+const auto emit_shift = [&](EEIROp ir) {
+Emit(block, ir, gpr(Rd(op)), gpr(Rt(op)), EEIRReg::INVALID, Shamt(op));
+};
+
+switch (Funct(op))
+{
+case 0x00: emit_rd_rs_rt(EEIROp::Madd); return false;
+case 0x01: emit_rd_rs_rt(EEIROp::MaddU); return false;
+case 0x04: emit_rd_rs(EEIROp::Plzcw); return false;
+
+case 0x08:
+{
+switch (Shamt(op))
+{
+case 0x00: emit_rd_rs_rt(EEIROp::Paddw); return false;
+case 0x01: emit_rd_rs_rt(EEIROp::Psubw); return false;
+case 0x02: emit_rd_rs_rt(EEIROp::Pcgtw); return false;
+case 0x03: emit_rd_rs_rt(EEIROp::Pmaxw); return false;
+case 0x04: emit_rd_rs_rt(EEIROp::Paddh); return false;
+case 0x05: emit_rd_rs_rt(EEIROp::Psubh); return false;
+case 0x06: emit_rd_rs_rt(EEIROp::Pcgth); return false;
+case 0x07: emit_rd_rs_rt(EEIROp::Pmaxh); return false;
+case 0x08: emit_rd_rs_rt(EEIROp::Paddb); return false;
+case 0x09: emit_rd_rs_rt(EEIROp::Psubb); return false;
+case 0x0A: emit_rd_rs_rt(EEIROp::Pcgtb); return false;
+case 0x10: emit_rd_rs_rt(EEIROp::Paddsw); return false;
+case 0x11: emit_rd_rs_rt(EEIROp::Psubsw); return false;
+case 0x12: emit_rd_rs_rt(EEIROp::Pextlw); return false;
+case 0x13: emit_rd_rs_rt(EEIROp::Ppacw); return false;
+case 0x14: emit_rd_rs_rt(EEIROp::Paddsh); return false;
+case 0x15: emit_rd_rs_rt(EEIROp::Psubsh); return false;
+case 0x16: emit_rd_rs_rt(EEIROp::Pextlh); return false;
+case 0x17: emit_rd_rs_rt(EEIROp::Ppach); return false;
+case 0x18: emit_rd_rs_rt(EEIROp::Paddsb); return false;
+case 0x19: emit_rd_rs_rt(EEIROp::Psubsb); return false;
+case 0x1A: emit_rd_rs_rt(EEIROp::Pextlb); return false;
+case 0x1B: emit_rd_rs_rt(EEIROp::Ppacb); return false;
+case 0x1E: emit_rd_rt(EEIROp::Pext5); return false;
+case 0x1F: emit_rd_rt(EEIROp::Ppac5); return false;
+default: Emit(block, EEIROp::Nop); return false;
+}
+}
+
+case 0x10: emit_rd(EEIROp::Mfhi1); return false;
+case 0x11: emit_rs(EEIROp::Mthi1); return false;
+case 0x12: emit_rd(EEIROp::Mflo1); return false;
+case 0x13: emit_rs(EEIROp::Mtlo1); return false;
+case 0x18: emit_rd_rs_rt(EEIROp::Mult1); return false;
+case 0x19: emit_rd_rs_rt(EEIROp::MultU1); return false;
+case 0x1A: Emit(block, EEIROp::Div1, EEIRReg::INVALID, gpr(Rs(op)), gpr(Rt(op))); return false;
+case 0x1B: Emit(block, EEIROp::DivU1, EEIRReg::INVALID, gpr(Rs(op)), gpr(Rt(op))); return false;
+case 0x20: emit_rd_rs_rt(EEIROp::Madd1); return false;
+case 0x21: emit_rd_rs_rt(EEIROp::MaddU1); return false;
+
+case 0x28:
+{
+switch (Shamt(op))
+{
+case 0x01: emit_rd_rt(EEIROp::Pabsw); return false;
+case 0x02: emit_rd_rs_rt(EEIROp::Pceqw); return false;
+case 0x03: emit_rd_rs_rt(EEIROp::Pminw); return false;
+case 0x04: emit_rd_rs_rt(EEIROp::Padsbh); return false;
+case 0x05: emit_rd_rt(EEIROp::Pabsh); return false;
+case 0x06: emit_rd_rs_rt(EEIROp::Pceqh); return false;
+case 0x07: emit_rd_rs_rt(EEIROp::Pminh); return false;
+case 0x0A: emit_rd_rs_rt(EEIROp::Pceqb); return false;
+case 0x10: emit_rd_rs_rt(EEIROp::Padduw); return false;
+case 0x11: emit_rd_rs_rt(EEIROp::Psubuw); return false;
+case 0x12: emit_rd_rs_rt(EEIROp::Pextuw); return false;
+case 0x14: emit_rd_rs_rt(EEIROp::Padduh); return false;
+case 0x15: emit_rd_rs_rt(EEIROp::Psubuh); return false;
+case 0x16: emit_rd_rs_rt(EEIROp::Pextuh); return false;
+case 0x18: emit_rd_rs_rt(EEIROp::Paddub); return false;
+case 0x19: emit_rd_rs_rt(EEIROp::Psubub); return false;
+case 0x1A: emit_rd_rs_rt(EEIROp::Pextub); return false;
+case 0x1B: emit_rd_rs_rt(EEIROp::Qfsrv); return false;
+default: Emit(block, EEIROp::Nop); return false;
+}
+}
+
+// MMI2 (funct=0x09): PMADDW, PSLLVW, PINTH, PMULTW, PDIVW, PCPYLD, PMADDH/PHMADH,
+//                    PAND, PXOR, PMSUBH, PHMSBH, PEXEH, PREVH, PMULTH, PDIVBW, PEXEW, PROT3W
+case 0x09:
+{
+switch (Shamt(op))
+{
+case 0x00: emit_rd_rs_rt(EEIROp::Pmaddw); return false;
+case 0x02: Emit(block, EEIROp::Psllvw, gpr(Rd(op)), gpr(Rt(op)), gpr(Rs(op))); return false;
+case 0x03: Emit(block, EEIROp::Psrlvw, gpr(Rd(op)), gpr(Rt(op)), gpr(Rs(op))); return false;
+case 0x04: emit_rd_rs_rt(EEIROp::Pmsubw); return false;
+case 0x08: emit_rd(EEIROp::MmiPmfhi); return false;
+case 0x09: emit_rd(EEIROp::MmiPmflo); return false;
+case 0x0A: emit_rd_rs_rt(EEIROp::Pinth); return false;
+case 0x0C: emit_rd_rs_rt(EEIROp::Pmultw); return false;
+case 0x0D: Emit(block, EEIROp::Pdivw, EEIRReg::INVALID, gpr(Rs(op)), gpr(Rt(op))); return false;
+case 0x0E: emit_rd_rs_rt(EEIROp::Pcpyld); return false;
+case 0x10: emit_rd_rs_rt(EEIROp::Pmaddh); return false;
+case 0x11: emit_rd_rs_rt(EEIROp::Phmadh); return false;
+case 0x12: emit_rd_rs_rt(EEIROp::Pand); return false;
+case 0x13: emit_rd_rs_rt(EEIROp::Pxor); return false;
+case 0x14: emit_rd_rs_rt(EEIROp::Pmsubh); return false;
+case 0x15: emit_rd_rs_rt(EEIROp::Phmsbh); return false;
+case 0x1A: emit_rd_rt(EEIROp::Pexeh); return false;
+case 0x1B: emit_rd_rt(EEIROp::Prevh); return false;
+case 0x1C: emit_rd_rs_rt(EEIROp::Pmulth); return false;
+case 0x1D: Emit(block, EEIROp::Pdivbw, EEIRReg::INVALID, gpr(Rs(op)), gpr(Rt(op))); return false;
+case 0x1E: emit_rd_rt(EEIROp::Pexew); return false;
+case 0x1F: emit_rd_rt(EEIROp::Prot3w); return false;
+default: Emit(block, EEIROp::Nop); return false;
+}
+}
+
+// MMI3 (funct=0x29): PMADDUW, PSRAVW, PMTHI, PMTLO, PINTEH, PMULTUW, PDIVUW,
+//                    PCPYUD, POR, PNOR, PEXCH, PCPYH, PEXCW
+case 0x29:
+{
+switch (Shamt(op))
+{
+case 0x00: emit_rd_rs_rt(EEIROp::Pmadduw); return false;
+case 0x03: Emit(block, EEIROp::Psravw, gpr(Rd(op)), gpr(Rt(op)), gpr(Rs(op))); return false;
+case 0x08: Emit(block, EEIROp::MmiPmthi, EEIRReg::INVALID, gpr(Rs(op))); return false;
+case 0x09: Emit(block, EEIROp::MmiPmtlo, EEIRReg::INVALID, gpr(Rs(op))); return false;
+case 0x0A: emit_rd_rs_rt(EEIROp::Pinteh); return false;
+case 0x0C: emit_rd_rs_rt(EEIROp::Pmultuw); return false;
+case 0x0D: Emit(block, EEIROp::Pdivuw, EEIRReg::INVALID, gpr(Rs(op)), gpr(Rt(op))); return false;
+case 0x0E: emit_rd_rs_rt(EEIROp::Pcpyud); return false;
+case 0x12: emit_rd_rs_rt(EEIROp::Por); return false;
+case 0x13: emit_rd_rs_rt(EEIROp::Pnor); return false;
+case 0x1A: emit_rd_rt(EEIROp::Pexch); return false;
+case 0x1B: emit_rd_rt(EEIROp::Pcpyh); return false;
+case 0x1E: emit_rd_rt(EEIROp::Pexcw); return false;
+default: Emit(block, EEIROp::Nop); return false;
+}
+}
+
+case 0x30:
+Emit(block, EEIROp::Pmfhl, gpr(Rd(op)), EEIRReg::INVALID, EEIRReg::INVALID, Shamt(op));
+return false;
+case 0x31: emit_rs(EEIROp::Pmthl); return false;
+case 0x34: emit_shift(EEIROp::Psllh); return false;
+case 0x36: emit_shift(EEIROp::Psrlh); return false;
+case 0x37: emit_shift(EEIROp::Psrah); return false;
+case 0x3C: emit_shift(EEIROp::Psllw); return false;
+case 0x3E: emit_shift(EEIROp::Psrlw); return false;
+case 0x3F: emit_shift(EEIROp::Psraw); return false;
+
+default:
+Emit(block, EEIROp::Nop);
+return false;
+}
 }
 } // namespace armsx2::wasm

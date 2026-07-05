@@ -4,6 +4,10 @@
 #include "mips_to_ir.h"
 #include "ee_ir_interpreter.h"
 #include "ee_state.h"
+#include "iop_state.h"
+#include "iop_ir.h"
+#include "iop_to_ir.h"
+#include "iop_ir_interpreter.h"
 
 #include <SDL3/SDL.h>
 
@@ -55,6 +59,13 @@ struct WasmBootstrapApp
 	armsx2::wasm::EEIRBlock ee_lifted_block;
 	std::string ee_ir_summary;
 	bool ee_ir_lifted = false;
+
+	armsx2::wasm::IopLifter iop_lifter;
+	armsx2::wasm::IopIRInterpreter iop_interpreter;
+	armsx2::wasm::IOPState iop_state;
+	armsx2::wasm::IOPIRBlock iop_lifted_block;
+	std::string iop_ir_summary;
+	bool iop_ir_lifted = false;
 };
 
 WasmBootstrapApp g_app;
@@ -367,6 +378,36 @@ int armsx2_wasm_load_program(const std::uint8_t* data, size_t size)
 
 			std::fprintf(stdout, "%s\n", g_app.ee_ir_summary.c_str());
 		}
+
+		extern IopVM_MemoryAllocMess* iopMem;
+		if (iopMem)
+		{
+			g_app.iop_state.Reset();
+			g_app.iop_lifted_block = g_app.iop_lifter.LiftBlock(
+				reinterpret_cast<const std::uint8_t*>(iopMem),
+				sizeof(IopVM_MemoryAllocMess),
+				g_app.iop_state.pc);
+			g_app.iop_ir_lifted = true;
+			auto iop_result = g_app.iop_interpreter.Execute(
+				g_app.iop_lifted_block, g_app.iop_state,
+				reinterpret_cast<std::uint8_t*>(iopMem),
+				sizeof(IopVM_MemoryAllocMess));
+			std::ostringstream iop_out;
+			iop_out << "--- IOP IR Pipeline ---\n";
+			iop_out << "Reset vector: 0x" << std::hex << g_app.iop_state.pc << " (BFC00000)\n";
+			iop_out << "Block range: 0x" << std::hex << g_app.iop_lifted_block.start_pc
+			        << " .. 0x" << std::hex << g_app.iop_lifted_block.end_pc << std::dec << "\n";
+			iop_out << "IR nodes emitted: " << g_app.iop_lifted_block.instructions.size() << "\n";
+			iop_out << "IR nodes executed: " << iop_result.instructions_run << "\n";
+			iop_out << "Next PC: 0x" << std::hex << iop_result.next_pc << "\n" << std::dec;
+			if (iop_result.halted)
+				iop_out << "Halted: yes\n";
+			if (!iop_result.error.empty())
+				iop_out << "Error: " << iop_result.error << "\n";
+			iop_out << "\n" << g_app.iop_lifted_block.Dump();
+			g_app.iop_ir_summary = iop_out.str();
+			std::fprintf(stdout, "%s\n", g_app.iop_ir_summary.c_str());
+		}
 	}
 
 	return g_app.loaded_program.valid ? 1 : 0;
@@ -386,6 +427,14 @@ EMSCRIPTEN_KEEPALIVE
 const char* armsx2_wasm_get_ir_summary()
 {
 	return g_app.ee_ir_summary.c_str();
+}
+
+#if defined(__EMSCRIPTEN__)
+EMSCRIPTEN_KEEPALIVE
+#endif
+const char* armsx2_wasm_get_iop_ir_summary()
+{
+	return g_app.iop_ir_summary.c_str();
 }
 
 #if defined(__EMSCRIPTEN__)

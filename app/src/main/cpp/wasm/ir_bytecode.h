@@ -291,6 +291,147 @@ enum class EEIROp : std::uint16_t
 	LQC2,
 	SQC2,
 
+	// -- MMI pipeline-1 HI1/LO1 moves -----------------------------------------
+	Mfhi1,
+	Mthi1,
+	Mflo1,
+	Mtlo1,
+
+	// -- MMI multiply/divide (pipeline 1) -------------------------------------
+	Mult1,
+	MultU1,
+	Div1,
+	DivU1,
+
+	// -- MMI multiply-accumulate -----------------------------------------------
+	Madd,
+	MaddU,
+	Madd1,
+	MaddU1,
+
+	// -- MMI PLZCW -------------------------------------------------------------
+	Plzcw,
+
+	// -- MMI PMFHL / PMTHL ----------------------------------------------------
+	Pmfhl,
+	Pmthl,
+
+	// -- MMI parallel shifts (immediate) -------------------------------------
+	Psllh,
+	Psrlh,
+	Psrah,
+	Psllw,
+	Psrlw,
+	Psraw,
+
+	// -- MMI parallel shifts (variable) --------------------------------------
+	Psllvw,
+	Psrlvw,
+	Psravw,
+
+	// -- MMI parallel add/sub (wrapping) -------------------------------------
+	Paddw,
+	Psubw,
+	Paddh,
+	Psubh,
+	Paddb,
+	Psubb,
+
+	// -- MMI parallel add/sub (signed saturation) ----------------------------
+	Paddsw,
+	Psubsw,
+	Paddsh,
+	Psubsh,
+	Paddsb,
+	Psubsb,
+
+	// -- MMI parallel add/sub (unsigned saturation) --------------------------
+	Padduw,
+	Psubuw,
+	Padduh,
+	Psubuh,
+	Paddub,
+	Psubub,
+
+	// -- MMI PADSBH -----------------------------------------------------------
+	Padsbh,
+
+	// -- MMI parallel compare -------------------------------------------------
+	Pcgtw,
+	Pcgth,
+	Pcgtb,
+	Pceqw,
+	Pceqh,
+	Pceqb,
+
+	// -- MMI parallel max/min -------------------------------------------------
+	Pmaxw,
+	Pmaxh,
+	Pminw,
+	Pminh,
+
+	// -- MMI parallel abs -----------------------------------------------------
+	Pabsw,
+	Pabsh,
+
+	// -- MMI parallel extend/pack ---------------------------------------------
+	Pextlw,
+	Pextlh,
+	Pextlb,
+	Pextuw,
+	Pextuh,
+	Pextub,
+	Ppacw,
+	Ppach,
+	Ppacb,
+	Pext5,
+	Ppac5,
+
+	// -- MMI parallel logic ---------------------------------------------------
+	Pand,
+	Por,
+	Pxor,
+	Pnor,
+
+	// -- MMI parallel copy/interleave -----------------------------------------
+	Pcpyld,
+	Pcpyud,
+	Pcpyh,
+	Pinth,
+	Pinteh,
+
+	// -- MMI parallel exchange/rotate -----------------------------------------
+	Pexeh,
+	Prevh,
+	Pexew,
+	Prot3w,
+	Pexch,
+	Pexcw,
+
+	// -- MMI parallel multiply ------------------------------------------------
+	Pmulth,
+	Pmultw,
+	Pmultuw,
+	Pmaddh,
+	Pmaddw,
+	Pmadduw,
+	Pmsubh,
+	Pmsubw,
+	Phmadh,
+	Phmsbh,
+	MmiPmfhi,
+	MmiPmflo,
+	MmiPmthi,
+	MmiPmtlo,
+
+	// -- MMI parallel divide --------------------------------------------------
+	Pdivw,
+	Pdivuw,
+	Pdivbw,
+
+	// -- QFSRV ----------------------------------------------------------------
+	Qfsrv,
+
 	// Keep this last.
 	Count,
 };

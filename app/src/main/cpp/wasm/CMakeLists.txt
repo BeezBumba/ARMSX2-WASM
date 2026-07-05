@@ -11,6 +11,8 @@ add_executable(armsx2-wasm-bootstrap
 	wasm_memory.cpp
 	mips_to_ir.cpp
 	ee_ir_interpreter.cpp
+	iop_to_ir.cpp
+	iop_ir_interpreter.cpp
 )
 
 target_include_directories(armsx2-wasm-bootstrap PRIVATE
@@ -35,7 +37,7 @@ target_link_options(armsx2-wasm-bootstrap PRIVATE
 	"SHELL:-sFULL_ES3=1"
 	"SHELL:-sALLOW_MEMORY_GROWTH=1"
 	"SHELL:-sFORCE_FILESYSTEM=1"
-	"SHELL:-sEXPORTED_FUNCTIONS=['_malloc','_free','_armsx2_wasm_load_program','_armsx2_wasm_get_program_summary','_armsx2_wasm_get_ir_summary','_armsx2_wasm_mount_bios','_armsx2_wasm_mount_game','_armsx2_wasm_get_browser_file_summary']"
+	"SHELL:-sEXPORTED_FUNCTIONS=['_malloc','_free','_armsx2_wasm_load_program','_armsx2_wasm_get_program_summary','_armsx2_wasm_get_ir_summary','_armsx2_wasm_get_iop_ir_summary','_armsx2_wasm_mount_bios','_armsx2_wasm_mount_game','_armsx2_wasm_get_browser_file_summary']"
 	"SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','UTF8ToString','ccall']"
 	"SHELL:--pre-js ${CMAKE_CURRENT_SOURCE_DIR}/wasm_host.js"
 	"SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/index.html"
