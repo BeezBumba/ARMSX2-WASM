@@ -13,6 +13,8 @@ endif()
 # Project Name
 project(Pcsx2 C CXX)
 
+option(ARMSX2_WASM_BOOTSTRAP "Build the standalone ARMSX2 WASM bootstrap target" OFF)
+
 # Variable to check that people use the good file
 set(TOP_CMAKE_WAS_SOURCED TRUE)
 
@@ -32,6 +34,12 @@ include(Pcsx2Utils)
 check_no_parenthesis_in_path()
 detect_operating_system()
 detect_compiler()
+
+if(EMSCRIPTEN AND ARMSX2_WASM_BOOTSTRAP)
+	add_subdirectory(3rdparty/SDL3 EXCLUDE_FROM_ALL)
+	add_subdirectory(wasm)
+	return()
+endif()
 
 #-------------------------------------------------------------------------------
 # Include specific module

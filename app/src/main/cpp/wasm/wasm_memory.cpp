@@ -1,0 +1,342 @@
+#include "wasm_memory.h"
+
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include <fstream>
+#include <memory>
+#include <new>
+#include <sstream>
+#include <vector>
+
+alignas(__pagealignsize) u8 eeHw[Ps2MemSize::Hardware] = {};
+alignas(__pagealignsize) u8 iopHw[Ps2MemSize::IopHardware] = {};
+EEVM_MemoryAllocMess* eeMem = nullptr;
+IopVM_MemoryAllocMess* iopMem = nullptr;
+
+namespace armsx2::wasm
+{
+namespace
+{
+std::unique_ptr<EEVM_MemoryAllocMess> s_ee_memory;
+std::unique_ptr<IopVM_MemoryAllocMess> s_iop_memory;
+std::vector<u8> s_bios_image;
+constexpr u32 s_bios_base_address = 0x1FC00000u;
+constexpr u32 s_bios_window_size = 0x00400000u;
+
+struct EETlbEntry
+{
+	u32 virtual_base;
+	u32 size;
+	u32 physical_base;
+};
+
+constexpr std::array<EETlbEntry, 3> s_bootstrap_ee_tlb = {{
+	{0x1FC00000u, s_bios_window_size, s_bios_base_address},
+	{0x9FC00000u, s_bios_window_size, s_bios_base_address},
+	{0xBFC00000u, s_bios_window_size, s_bios_base_address},
+}};
+
+u32 TranslateEEAddress(u32 virtual_address)
+{
+	for (const EETlbEntry& entry : s_bootstrap_ee_tlb)
+	{
+		if (virtual_address >= entry.virtual_base)
+		{
+			const u32 offset = virtual_address - entry.virtual_base;
+			if (offset < entry.size)
+				return entry.physical_base + offset;
+		}
+	}
+
+	// KSEG0/KSEG1 direct-mapped fallback for the current bootstrap memory model.
+	return virtual_address & 0x1FFFFFFF;
+}
+
+std::string FormatHex(u32 value)
+{
+	std::ostringstream stream;
+	stream << "0x" << std::hex << std::uppercase << value;
+	return stream.str();
+}
+
+bool EnsureBootstrapMemory(std::string* error)
+{
+	if (!s_ee_memory)
+		s_ee_memory.reset(new (std::nothrow) EEVM_MemoryAllocMess);
+	if (!s_iop_memory)
+		s_iop_memory.reset(new (std::nothrow) IopVM_MemoryAllocMess);
+
+	if (!s_ee_memory || !s_iop_memory)
+	{
+		if (error)
+			*error = "Failed to allocate the bootstrap EE/IOP memory backing.";
+		return false;
+	}
+
+	eeMem = s_ee_memory.get();
+	iopMem = s_iop_memory.get();
+	return true;
+}
+
+template <typename Callback>
+bool VisitEEMemoryConst(u32 address, u32 size, Callback callback)
+{
+	if (size == 0 || !eeMem)
+		return size == 0;
+
+	u64 current_address = address;
+	u32 remaining = size;
+	while (remaining > 0)
+	{
+		u32 chunk = 0;
+		const u32 physical_address = TranslateEEAddress(static_cast<u32>(current_address));
+		if (current_address >= 0x70000000ull && current_address < 0x70004000ull)
+		{
+			const size_t offset = static_cast<size_t>(current_address - 0x70000000ull);
+			chunk = std::min<u32>(remaining, static_cast<u32>(Ps2MemSize::Scratch - offset));
+			callback(eeMem->Scratch + offset, chunk);
+		}
+		else if (physical_address < Ps2MemSize::MainRam)
+		{
+			chunk = std::min<u32>(remaining, Ps2MemSize::MainRam - physical_address);
+			callback(eeMem->Main + physical_address, chunk);
+		}
+		else if (physical_address < Ps2MemSize::TotalRam)
+		{
+			const u32 offset = physical_address - Ps2MemSize::MainRam;
+			chunk = std::min<u32>(remaining, Ps2MemSize::TotalRam - physical_address);
+			callback(eeMem->ExtraMemory + offset, chunk);
+		}
+		else if (!s_bios_image.empty() &&
+				 physical_address >= s_bios_base_address &&
+				 physical_address < (s_bios_base_address + static_cast<u32>(s_bios_image.size())))
+		{
+			const u32 bios_offset = physical_address - s_bios_base_address;
+			chunk = std::min<u32>(remaining, static_cast<u32>(s_bios_image.size()) - bios_offset);
+			callback(s_bios_image.data() + bios_offset, chunk);
+		}
+		else
+		{
+			return false;
+		}
+
+		current_address += chunk;
+		remaining -= chunk;
+	}
+
+	return true;
+}
+
+template <typename Callback>
+bool VisitEEMemory(u32 address, u32 size, Callback callback, std::string* error)
+{
+	if (size == 0)
+		return true;
+
+	u64 current_address = address;
+	u32 remaining = size;
+	while (remaining > 0)
+	{
+		u32 chunk = 0;
+		if (current_address >= 0x70000000ull && current_address < 0x70004000ull)
+		{
+			const size_t offset = static_cast<size_t>(current_address - 0x70000000ull);
+			chunk = std::min<u32>(remaining, static_cast<u32>(Ps2MemSize::Scratch - offset));
+			callback(eeMem->Scratch + offset, chunk);
+		}
+		else
+		{
+			const u32 translated_address = TranslateEEAddress(static_cast<u32>(current_address));
+			if (translated_address < Ps2MemSize::MainRam)
+			{
+				chunk = std::min<u32>(remaining, Ps2MemSize::MainRam - translated_address);
+				callback(eeMem->Main + translated_address, chunk);
+			}
+			else if (translated_address < Ps2MemSize::TotalRam)
+			{
+				const u32 offset = translated_address - Ps2MemSize::MainRam;
+				chunk = std::min<u32>(remaining, Ps2MemSize::TotalRam - translated_address);
+				callback(eeMem->ExtraMemory + offset, chunk);
+			}
+			else if (!s_bios_image.empty() &&
+					 translated_address >= s_bios_base_address &&
+					 translated_address < (s_bios_base_address + static_cast<u32>(s_bios_image.size())))
+			{
+				const u32 bios_offset = translated_address - s_bios_base_address;
+				chunk = std::min<u32>(remaining, static_cast<u32>(s_bios_image.size()) - bios_offset);
+				callback(s_bios_image.data() + bios_offset, chunk);
+			}
+			else
+			{
+				if (error)
+					*error = "Address " + FormatHex(static_cast<u32>(current_address)) + " is outside the bootstrap EE memory layout.";
+				return false;
+			}
+		}
+
+		current_address += chunk;
+		remaining -= chunk;
+	}
+
+	return true;
+}
+
+template <typename Callback>
+bool VisitIOPMemory(u32 address, u32 size, Callback callback, std::string* error)
+{
+	if (size == 0)
+		return true;
+
+	if (!iopMem)
+	{
+		if (error)
+			*error = "IOP memory is unavailable.";
+		return false;
+	}
+
+	u64 current_address = address;
+	u32 remaining = size;
+	while (remaining > 0)
+	{
+		const u32 offset = static_cast<u32>(current_address) & (Ps2MemSize::IopRam - 1);
+		const u32 chunk = std::min<u32>(remaining, Ps2MemSize::IopRam - offset);
+		callback(iopMem->Main + offset, chunk);
+		current_address += chunk;
+		remaining -= chunk;
+	}
+
+	return true;
+}
+} // namespace
+
+bool ResetBootstrapPs2Memory(std::string* error)
+{
+	if (!EnsureBootstrapMemory(error))
+		return false;
+
+	std::memset(eeMem, 0, sizeof(*eeMem));
+	std::memset(iopMem, 0, sizeof(*iopMem));
+	std::memset(eeHw, 0, sizeof(eeHw));
+	std::memset(iopHw, 0, sizeof(iopHw));
+	return true;
+}
+
+bool WriteBootstrapEEMemory(u32 address, std::span<const u8> data, std::string* error)
+{
+	if (data.empty())
+		return true;
+	if (!EnsureBootstrapMemory(error))
+		return false;
+
+	size_t source_offset = 0;
+	return VisitEEMemory(address, static_cast<u32>(data.size()),
+		[&](u8* destination, u32 size)
+		{
+			std::memcpy(destination, data.data() + source_offset, size);
+			source_offset += size;
+		},
+		error);
+}
+
+bool WriteBootstrapIOPMemory(u32 address, std::span<const u8> data, std::string* error)
+{
+	if (data.empty())
+		return true;
+	if (!EnsureBootstrapMemory(error))
+		return false;
+
+	size_t source_offset = 0;
+	return VisitIOPMemory(address, static_cast<u32>(data.size()),
+		[&](u8* destination, u32 size)
+		{
+			std::memcpy(destination, data.data() + source_offset, size);
+			source_offset += size;
+		},
+		error);
+}
+
+bool ZeroBootstrapIOPMemory(u32 address, u32 size, std::string* error)
+{
+	if (size == 0)
+		return true;
+	if (!EnsureBootstrapMemory(error))
+		return false;
+
+	return VisitIOPMemory(address, size,
+		[](u8* destination, u32 chunk_size)
+		{
+			std::memset(destination, 0, chunk_size);
+		},
+		error);
+}
+
+bool LoadBootstrapBiosImage(const char* mounted_path, std::string* error)
+{
+	if (!mounted_path || mounted_path[0] == '\0')
+	{
+		if (error)
+			*error = "No BIOS path was provided.";
+		return false;
+	}
+
+	std::ifstream bios_file(mounted_path, std::ios::binary | std::ios::ate);
+	if (!bios_file)
+	{
+		if (error)
+			*error = "Failed to open the mounted BIOS image.";
+		return false;
+	}
+
+	const std::streamsize bios_size = bios_file.tellg();
+	if (bios_size <= 0)
+	{
+		if (error)
+			*error = "Mounted BIOS image is empty.";
+		return false;
+	}
+
+	if (bios_size > static_cast<std::streamsize>(0x00400000))
+	{
+		if (error)
+			*error = "Mounted BIOS image exceeds the current 4 MiB bootstrap BIOS limit.";
+		return false;
+	}
+
+	bios_file.seekg(0, std::ios::beg);
+	std::vector<u8> image(static_cast<size_t>(bios_size));
+	if (!bios_file.read(reinterpret_cast<char*>(image.data()), bios_size))
+	{
+		if (error)
+			*error = "Failed to read the mounted BIOS image.";
+		return false;
+	}
+
+	s_bios_image = std::move(image);
+	return true;
+}
+
+u32 TranslateBootstrapEEPhysicalAddress(u32 virtual_address)
+{
+	return TranslateEEAddress(virtual_address);
+}
+
+bool ReadBootstrapEEMemory(u32 address, u8* destination, u32 size)
+{
+	if (!destination || size == 0 || !eeMem)
+		return false;
+
+	size_t destination_offset = 0;
+	return VisitEEMemoryConst(address, size,
+		[&](const u8* source, u32 chunk)
+		{
+			std::memcpy(destination + destination_offset, source, chunk);
+			destination_offset += chunk;
+		});
+}
+
+u32 GetBootstrapBiosSize()
+{
+	return static_cast<u32>(s_bios_image.size());
+}
+} // namespace armsx2::wasm

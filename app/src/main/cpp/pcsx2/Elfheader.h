@@ -109,6 +109,27 @@ struct Elf32_Rel {
 	u32	r_info;
 };
 
+#pragma pack(push, 1)
+struct PSXEXEHeader
+{
+	char id[8];
+	char pad1[8];
+	u32 initial_pc;
+	u32 initial_gp;
+	u32 load_address;
+	u32 file_size;
+	u32 unk0;
+	u32 unk1;
+	u32 memfill_start;
+	u32 memfill_size;
+	u32 initial_sp_base;
+	u32 initial_sp_offset;
+	u32 reserved[5];
+	char marker[0x7B4];
+};
+static_assert(sizeof(PSXEXEHeader) == 0x800);
+#pragma pack(pop)
+
 class ElfObject final
 {
 public:

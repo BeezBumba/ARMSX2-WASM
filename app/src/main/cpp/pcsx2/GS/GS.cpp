@@ -80,6 +80,7 @@ static RenderAPI GetAPIForRenderer(GSRendererType renderer)
 	switch (renderer)
 	{
 		case GSRendererType::OGL:
+		case GSRendererType::WebGL2:
 			return RenderAPI::OpenGL;
 
 		case GSRendererType::VK:
@@ -615,6 +616,10 @@ std::vector<GSAdapterInfo> GSGetAdapterInfo(GSRendererType renderer)
 		}
 		break;
 #endif
+
+		case GSRendererType::WebGL2:
+			// WebGL2 currently reuses the OpenGL device path and does not expose adapters here.
+			break;
 
 		default:
 			break;

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARMSX2 WASM Bootstrap</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #05070d;
+      color: #d9e2f2;
+      font-family: system-ui, sans-serif;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #status {
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+    }
+
+    #tool-panels {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      padding: 0 1rem 1rem;
+    }
+
+    .panel {
+      flex: 1 1 20rem;
+      min-width: 18rem;
+      padding: 0.85rem;
+      border-radius: 0.75rem;
+      background: rgba(19, 27, 43, 0.88);
+      box-shadow: inset 0 0 0 1px rgba(94, 120, 168, 0.18);
+    }
+
+    .panel h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .panel p {
+      margin: 0 0 0.75rem;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      color: #9fb2d4;
+    }
+
+    .toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .toolbar-row input,
+    .toolbar-row button {
+      font: inherit;
+    }
+
+    .toolbar-row button {
+      padding: 0.45rem 0.85rem;
+      border: 0;
+      border-radius: 0.4rem;
+      background: #3e6cb7;
+      color: #f6f8fc;
+      cursor: pointer;
+    }
+
+    .toolbar-row button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .panel pre {
+      margin: 0;
+      padding-top: 0.75rem;
+      white-space: pre-wrap;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      color: #b9c8df;
+    }
+
+    #canvas {
+      flex: 1;
+      width: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">ARMSX2 WASM bootstrap: SDL3 + WebGL2 scaffold loading…</div>
+  <div id="tool-panels">
+    <section class="panel">
+      <h2>Executable loader</h2>
+      <p>Loads PS2 ELF and PS-X EXE payloads into the bootstrap EE/IOP memory backing.</p>
+      <div class="toolbar-row">
+        <input id="program-file" type="file" accept=".elf,.bin,.exe,.psx">
+        <button id="load-program" type="button" disabled>Load executable</button>
+      </div>
+      <pre id="program-info">No executable loaded yet.</pre>
+    </section>
+    <section class="panel">
+      <h2>Browser-backed BIOS mount</h2>
+      <p>Mounts a BIOS image directly from the browser without copying it into the WASM heap.</p>
+      <div class="toolbar-row">
+        <input id="bios-file" type="file" accept=".bin,.rom,.mec,.nvm">
+        <button id="mount-bios" type="button" disabled>Mount BIOS</button>
+        <button id="boot-bios" type="button" disabled>Boot BIOS</button>
+      </div>
+      <pre id="bios-info">No BIOS image mounted yet.</pre>
+    </section>
+    <section class="panel">
+      <h2>Browser-backed game image mount</h2>
+      <p>Imports disc images straight from the browser-backed filesystem with on-demand reads for files up to 4.7 GB.</p>
+      <div class="toolbar-row">
+        <input id="game-file" type="file" accept=".iso,.bin,.img,.mdf,.gz,.cso,.zso,.chd">
+        <button id="mount-game" type="button" disabled>Import game image</button>
+      </div>
+      <pre id="game-info">No game image imported yet.</pre>
+    </section>
+  </div>
+  <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  <script>
+    var Module = typeof Module !== 'undefined' ? Module : {};
+    Module.canvas = document.getElementById('canvas');
+    Module.setStatus = function (text) {
+      document.getElementById('status').textContent = text;
+    };
+    Module.setProgramInfo = function (text) {
+      document.getElementById('program-info').textContent = text;
+    };
+    Module.monitorRunDependencies = function (left) {
+      Module.setStatus(left ? ('Preparing assets (' + left + ' remaining)…') : 'Running bootstrap…');
+    };
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

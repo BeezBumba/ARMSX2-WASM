@@ -17,6 +17,19 @@ Its goal is to bring modern PS2 emulation to ARM platforms while staying aligned
 
 ARMSX2 allows you to play PS2 games on Android, iOS, Linux, macOS, and Windows devices, with a focus on ARM-based mobile and desktop hardware.
 
+## WASM Bootstrap
+
+A standalone SDL3/WebGL2 bootstrap target now lives under `app/src/main/cpp/wasm`.
+
+To configure the scaffold with Emscripten:
+
+```sh
+emcmake cmake -S <repo_root>/app/src/main/cpp -B /tmp/armsx2-wasm -DARMSX2_WASM_BOOTSTRAP=ON
+cmake --build /tmp/armsx2-wasm
+```
+
+This initial target is an infrastructure bootstrap: it creates web artifacts, opens an SDL3-backed WebGL2 canvas, mounts IDBFS for persistence, supports browser-backed BIOS/disc image selection via WORKERFS (including `.iso` imports up to 4.7 GB without copying the whole image into the WASM heap), and runs a minimal portable IR interpreter sample. It does not yet build the full emulator core.
+
 ## Project Details
 
 ARMSX2 began after years of there being no open source PS2 emulator for ARM systems, and so developer [@MoonPower](https://github.com/momo-AUX1) with the support of [@jpolo1224](https://github.com/jpolo1224) decided to try their hand at porting a new PS2 emulator for Android, forking from the repository PCSX2_ARM64 by developer Pontos. Moon has and will continue doing his best to fill in the gaps and make this into a complete emulator, with the goal to have version parity with PCSX2. This project is not officially associated with PCSX2, and we are not associated with any other forks made from the original repository. This is our own attempt at continuing PS2 emulation on Android, iOS, and MacOS. The emulator no longer operates as just x86 -> arm64, we now have native arm64 support in our refresh/2.0 builds.
