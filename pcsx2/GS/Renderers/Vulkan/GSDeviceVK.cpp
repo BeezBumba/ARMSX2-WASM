@@ -2817,9 +2817,14 @@ bool GSDeviceVK::CreateDeviceAndSwapChain()
 				Host::ReportErrorAsync("Error", "Failed to create Vulkan instance. Does your GPU and/or driver support Vulkan?");
 				return false;
 			}
-
+			
 			ERROR_LOG("VK: validation/debug layers requested but are unavailable. Creating non-debug device.");
 		}
+	 else
+    {
+        Host::ReportErrorAsync("Error", "Failed to create Vulkan instance. Does your GPU and/or driver support Vulkan?");
+        return false;
+    }
 	}
 
 	if (!Vulkan::LoadVulkanInstanceFunctions(m_instance))
